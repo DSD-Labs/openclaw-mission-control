@@ -27,6 +27,12 @@ class Agent(Base):
     __tablename__ = "agents"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
+
+    # Workspace scoping (nullable for v0 backfill; will become required later)
+    workspace_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("workspaces.id"), nullable=True
+    )
+
     name: Mapped[str] = mapped_column(String, nullable=False)
 
     # High-level function / department label (e.g. "Ops", "Finance")
@@ -68,6 +74,12 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
+
+    # Workspace scoping
+    workspace_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("workspaces.id"), nullable=True
+    )
+
     title: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.BACKLOG)
@@ -107,6 +119,12 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
+
+    # Workspace scoping
+    workspace_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("workspaces.id"), nullable=True
+    )
+
     type: Mapped[ConversationType] = mapped_column(Enum(ConversationType), nullable=False)
 
     task_id: Mapped[str | None] = mapped_column(String, ForeignKey("tasks.id"), unique=True)
@@ -140,6 +158,11 @@ class WarRoomRun(Base):
     __tablename__ = "war_room_runs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
+
+    workspace_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("workspaces.id"), nullable=True
+    )
+
     conversation_id: Mapped[str] = mapped_column(String, ForeignKey("conversations.id"), nullable=False)
 
     final_answer: Mapped[str] = mapped_column(Text, nullable=False)
@@ -156,6 +179,10 @@ class AuditEvent(Base):
     __tablename__ = "audit_events"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
+
+    workspace_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("workspaces.id"), nullable=True
+    )
 
     # who
     actor: Mapped[str] = mapped_column(String, default="unknown")
@@ -199,3 +226,7 @@ class Workspace(Base):
     gateway_id: Mapped[str | None] = mapped_column(String, ForeignKey("gateways.id"), nullable=True)
 
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships (optional)
+    agents: Mapped[list["Agent"]] = relationship(primaryjoin="Workspace.id==Agent.workspace_id")
+    tasks: Mapped[list["Task"]] = relationship(primaryjoin="Workspace.id==Task.workspace_id")

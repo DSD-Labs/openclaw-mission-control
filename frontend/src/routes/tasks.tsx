@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPatch, apiPost } from "@/lib/api";
 import { DndKanban as DndBoard } from "@/components/kanban/DndKanban";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,14 +77,7 @@ function TasksPage() {
 
   const patch = useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: Partial<Task> }) =>
-      fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:8787"}/api/tasks/${id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify(patch),
-      }).then(async (r) => {
-        if (!r.ok) throw new Error(`PATCH /api/tasks/${id} failed: ${r.status}`);
-        return (await r.json()) as Task;
-      }),
+      apiPatch<Task>(`/api/tasks/${id}`, patch),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["tasks"] });
     },

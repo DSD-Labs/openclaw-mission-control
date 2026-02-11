@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 
 export const Route = createRootRoute({
   component: () => (
@@ -16,6 +17,7 @@ export const Route = createRootRoute({
         <header className="flex items-center justify-between gap-4 border-b pb-3">
           <div className="flex items-center gap-3">
             <div className="font-black tracking-tight">OpenClaw Mission Control</div>
+            <WorkspaceSwitcher />
           </div>
 
           <nav className="hidden items-center gap-4 text-sm md:flex">

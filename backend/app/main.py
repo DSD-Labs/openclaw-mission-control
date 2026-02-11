@@ -58,11 +58,16 @@ def _actor_from_headers(
     return actor, role
 
 
+def _workspace_from_header(x_mc_workspace: str | None = Header(default=None)) -> str | None:
+    return x_mc_workspace
+
+
 def _audit(
     db: Session,
     *,
     actor: str,
     role: str,
+    workspace_id: str | None,
     action: str,
     entity_type: str,
     entity_id: str | None,
@@ -71,6 +76,7 @@ def _audit(
     db.add(
         AuditEvent(
             id=str(uuid4()),
+            workspace_id=workspace_id,
             actor=actor,
             role=role,
             action=action,
@@ -122,6 +128,7 @@ def create_gateway(
         db,
         actor=actor_role[0],
         role=actor_role[1],
+        workspace_id=None,
         action="gateway.create",
         entity_type="gateway",
         entity_id=gw.id,
@@ -149,6 +156,7 @@ def create_workspace(
         db,
         actor=actor_role[0],
         role=actor_role[1],
+        workspace_id=ws.id,
         action="workspace.create",
         entity_type="workspace",
         entity_id=ws.id,
@@ -163,8 +171,14 @@ def create_workspace(
 
 
 @app.get("/api/agents", response_model=list[AgentOut])
-def list_agents(db: Session = Depends(get_db)):
-    agents = db.query(Agent).order_by(Agent.updated_at.desc()).all()
+def list_agents(
+    db: Session = Depends(get_db),
+    workspace_id: str | None = Depends(_workspace_from_header),
+):
+    q = db.query(Agent)
+    if workspace_id:
+        q = q.filter(Agent.workspace_id == workspace_id)
+    agents = q.order_by(Agent.updated_at.desc()).all()
     for a in agents:
         _ = a.work_state
     return agents
@@ -175,9 +189,11 @@ def create_agent(
     body: AgentCreate,
     db: Session = Depends(get_db),
     actor_role: tuple[str, str] = Depends(_actor_from_headers),
+    workspace_id: str | None = Depends(_workspace_from_header),
 ):
     agent = Agent(
         id=str(uuid4()),
+        workspace_id=workspace_id,
         name=body.name,
         role=body.role,
         soul_md=body.soul_md,
@@ -193,6 +209,7 @@ def create_agent(
         db,
         actor=actor_role[0],
         role=actor_role[1],
+        workspace_id=workspace_id,
         action="agent.create",
         entity_type="agent",
         entity_id=agent.id,
@@ -221,6 +238,7 @@ def update_agent(
     body: dict,
     db: Session = Depends(get_db),
     actor_role: tuple[str, str] = Depends(_actor_from_headers),
+    workspace_id: str | None = Depends(_workspace_from_header),
 ):
     agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if not agent:
@@ -239,6 +257,7 @@ def update_agent(
         db,
         actor=actor_role[0],
         role=actor_role[1],
+        workspace_id=workspace_id,
         action="agent.update",
         entity_type="agent",
         entity_id=agent.id,
@@ -289,8 +308,14 @@ def upsert_agent_work_state(
 
 
 @app.get("/api/tasks", response_model=list[TaskOut])
-def list_tasks(db: Session = Depends(get_db)):
-    return db.query(Task).order_by(Task.priority.desc(), Task.updated_at.desc()).all()
+def list_tasks(
+    db: Session = Depends(get_db),
+    workspace_id: str | None = Depends(_workspace_from_header),
+):
+    q = db.query(Task)
+    if workspace_id:
+        q = q.filter(Task.workspace_id == workspace_id)
+    return q.order_by(Task.priority.desc(), Task.updated_at.desc()).all()
 
 
 @app.post("/api/tasks", response_model=TaskOut, dependencies=[Depends(_require_api_key)])
@@ -298,9 +323,11 @@ def create_task(
     body: TaskCreate,
     db: Session = Depends(get_db),
     actor_role: tuple[str, str] = Depends(_actor_from_headers),
+    workspace_id: str | None = Depends(_workspace_from_header),
 ):
     task = Task(
         id=str(uuid4()),
+        workspace_id=workspace_id,
         title=body.title,
         description=body.description,
         status=body.status,
@@ -312,6 +339,7 @@ def create_task(
         db,
         actor=actor_role[0],
         role=actor_role[1],
+        workspace_id=workspace_id,
         action="task.create",
         entity_type="task",
         entity_id=task.id,
@@ -340,6 +368,7 @@ def update_task(
     body: dict,
     db: Session = Depends(get_db),
     actor_role: tuple[str, str] = Depends(_actor_from_headers),
+    workspace_id: str | None = Depends(_workspace_from_header),
 ):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
@@ -354,6 +383,7 @@ def update_task(
         db,
         actor=actor_role[0],
         role=actor_role[1],
+        workspace_id=workspace_id,
         action="task.update",
         entity_type="task",
         entity_id=task.id,
@@ -412,13 +442,15 @@ def add_turn(conversation_id: str, body: TurnCreate, db: Session = Depends(get_d
 
 
 @app.get("/api/audit", response_model=list[AuditEventOut])
-def list_audit(db: Session = Depends(get_db), limit: int = 200):
-    return (
-        db.query(AuditEvent)
-        .order_by(AuditEvent.created_at.desc())
-        .limit(min(limit, 500))
-        .all()
-    )
+def list_audit(
+    db: Session = Depends(get_db),
+    limit: int = 200,
+    workspace_id: str | None = Depends(_workspace_from_header),
+):
+    q = db.query(AuditEvent)
+    if workspace_id:
+        q = q.filter(AuditEvent.workspace_id == workspace_id)
+    return q.order_by(AuditEvent.created_at.desc()).limit(min(limit, 500)).all()
 
 
 # --- War Room ---
@@ -450,18 +482,19 @@ async def _send_telegram_via_openclaw(text: str) -> tuple[str | None, str | None
 async def war_room_run(
     db: Session = Depends(get_db),
     actor_role: tuple[str, str] = Depends(_actor_from_headers),
+    workspace_id: str | None = Depends(_workspace_from_header),
 ):
-    convo = Conversation(id=str(uuid4()), type=ConversationType.WAR_ROOM)
+    convo = Conversation(id=str(uuid4()), workspace_id=workspace_id, type=ConversationType.WAR_ROOM)
     db.add(convo)
 
     agents = db.query(Agent).order_by(Agent.name.asc()).all()
     agents_by_id = {a.id: a for a in agents}
 
+    tasks_q = db.query(Task).filter(Task.status.in_(["DOING", "BLOCKED"]))
+    if workspace_id:
+        tasks_q = tasks_q.filter(Task.workspace_id == workspace_id)
     tasks = (
-        db.query(Task)
-        .filter(Task.status.in_(["DOING", "BLOCKED"]))
-        .order_by(Task.status.asc(), Task.priority.desc(), Task.updated_at.desc())
-        .all()
+        tasks_q.order_by(Task.status.asc(), Task.priority.desc(), Task.updated_at.desc()).all()
     )
 
     def add_turn(speaker_type: str, content: str, speaker_id: str | None = None):
@@ -554,6 +587,7 @@ async def war_room_run(
     run_id = str(uuid4())
     wr = WarRoomRun(
         id=run_id,
+        workspace_id=workspace_id,
         conversation_id=convo.id,
         final_answer=final_answer,
         telegram_chat_id=settings.telegram_chat_id,
@@ -564,6 +598,7 @@ async def war_room_run(
         db,
         actor=actor_role[0],
         role=actor_role[1],
+        workspace_id=workspace_id,
         action="war_room.run",
         entity_type="war_room_run",
         entity_id=run_id,
