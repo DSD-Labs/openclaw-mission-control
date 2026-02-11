@@ -132,6 +132,20 @@ class AgentWorkStateUpsert(BaseModel):
     blockers: str = ""
 
 
+class AuditEventOut(BaseModel):
+    id: str
+    actor: str
+    role: str
+    action: str
+    entity_type: str
+    entity_id: str | None
+    payload: dict
+    created_at: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class ConversationOut(BaseModel):
     id: str
     type: ConversationType

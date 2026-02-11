@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WarRoomRouteImport } from './routes/war-room'
 import { Route as TasksRouteImport } from './routes/tasks'
+import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -22,6 +23,11 @@ const WarRoomRoute = WarRoomRouteImport.update({
 const TasksRoute = TasksRouteImport.update({
   id: '/tasks',
   path: '/tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuditRoute = AuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgentsRoute = AgentsRouteImport.update({
@@ -38,12 +44,14 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
+  '/audit': typeof AuditRoute
   '/tasks': typeof TasksRoute
   '/war-room': typeof WarRoomRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
+  '/audit': typeof AuditRoute
   '/tasks': typeof TasksRoute
   '/war-room': typeof WarRoomRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
+  '/audit': typeof AuditRoute
   '/tasks': typeof TasksRoute
   '/war-room': typeof WarRoomRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/agents' | '/tasks' | '/war-room'
+  fullPaths: '/' | '/agents' | '/audit' | '/tasks' | '/war-room'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/agents' | '/tasks' | '/war-room'
-  id: '__root__' | '/' | '/agents' | '/tasks' | '/war-room'
+  to: '/' | '/agents' | '/audit' | '/tasks' | '/war-room'
+  id: '__root__' | '/' | '/agents' | '/audit' | '/tasks' | '/war-room'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentsRoute: typeof AgentsRoute
+  AuditRoute: typeof AuditRoute
   TasksRoute: typeof TasksRoute
   WarRoomRoute: typeof WarRoomRoute
 }
@@ -83,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/tasks'
       preLoaderRoute: typeof TasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/audit': {
+      id: '/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AuditRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agents': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentsRoute: AgentsRoute,
+  AuditRoute: AuditRoute,
   TasksRoute: TasksRoute,
   WarRoomRoute: WarRoomRoute,
 }

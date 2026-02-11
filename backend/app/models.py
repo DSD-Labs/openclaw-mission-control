@@ -146,3 +146,23 @@ class WarRoomRun(Base):
     telegram_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+
+    # who
+    actor: Mapped[str] = mapped_column(String, default="unknown")
+    role: Mapped[str] = mapped_column(String, default="operator")
+
+    # what
+    action: Mapped[str] = mapped_column(String, nullable=False)  # e.g. task.update, agent.create
+    entity_type: Mapped[str] = mapped_column(String, nullable=False)  # agent/task/war_room
+    entity_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # details
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())

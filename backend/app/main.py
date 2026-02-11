@@ -1,7 +1,7 @@
 import json
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 
 from .openclaw import get_openclaw
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,11 +17,13 @@ from .models import (
     Agent,
     WarRoomRun,
     AgentWorkState,
+    AuditEvent,
 )
 from .schemas import (
     AgentCreate,
     AgentOut,
     AgentWorkStateUpsert,
+    AuditEventOut,
     ConversationCreate,
     ConversationOut,
     TaskCreate,
@@ -34,6 +36,45 @@ from .settings import settings
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="OpenClaw Mission Control API", version="0.0.1")
+
+
+def _require_api_key(x_mc_api_key: str | None = Header(default=None)):
+    if settings.mission_control_api_key:
+        if not x_mc_api_key or x_mc_api_key != settings.mission_control_api_key:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+
+
+def _actor_from_headers(
+    x_mc_user: str | None = Header(default=None),
+    x_mc_role: str | None = Header(default=None),
+) -> tuple[str, str]:
+    # v0: trust headers provided by UI (behind auth later)
+    actor = x_mc_user or "unknown"
+    role = x_mc_role or "operator"
+    return actor, role
+
+
+def _audit(
+    db: Session,
+    *,
+    actor: str,
+    role: str,
+    action: str,
+    entity_type: str,
+    entity_id: str | None,
+    payload: dict,
+):
+    db.add(
+        AuditEvent(
+            id=str(uuid4()),
+            actor=actor,
+            role=role,
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            payload=payload,
+        )
+    )
 
 origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
@@ -59,8 +100,12 @@ def list_agents(db: Session = Depends(get_db)):
     return agents
 
 
-@app.post("/api/agents", response_model=AgentOut)
-def create_agent(body: AgentCreate, db: Session = Depends(get_db)):
+@app.post("/api/agents", response_model=AgentOut, dependencies=[Depends(_require_api_key)])
+def create_agent(
+    body: AgentCreate,
+    db: Session = Depends(get_db),
+    actor_role: tuple[str, str] = Depends(_actor_from_headers),
+):
     agent = Agent(
         id=str(uuid4()),
         name=body.name,
@@ -74,6 +119,15 @@ def create_agent(body: AgentCreate, db: Session = Depends(get_db)):
         output_contract=body.output_contract.model_dump(),
     )
     db.add(agent)
+    _audit(
+        db,
+        actor=actor_role[0],
+        role=actor_role[1],
+        action="agent.create",
+        entity_type="agent",
+        entity_id=agent.id,
+        payload={"name": agent.name, "role": agent.role},
+    )
     db.commit()
     db.refresh(agent)
     return agent
@@ -87,8 +141,17 @@ def get_agent(agent_id: str, db: Session = Depends(get_db)):
     return agent
 
 
-@app.patch("/api/agents/{agent_id}", response_model=AgentOut)
-def update_agent(agent_id: str, body: dict, db: Session = Depends(get_db)):
+@app.patch(
+    "/api/agents/{agent_id}",
+    response_model=AgentOut,
+    dependencies=[Depends(_require_api_key)],
+)
+def update_agent(
+    agent_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    actor_role: tuple[str, str] = Depends(_actor_from_headers),
+):
     agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -103,13 +166,30 @@ def update_agent(agent_id: str, body: dict, db: Session = Depends(get_db)):
             setattr(agent, field, body[field])
 
     db.add(agent)
+    _audit(
+        db,
+        actor=actor_role[0],
+        role=actor_role[1],
+        action="agent.update",
+        entity_type="agent",
+        entity_id=agent.id,
+        payload=body,
+    )
     db.commit()
     db.refresh(agent)
     return agent
 
 
-@app.post("/api/agent-work-state", response_model=dict)
-def upsert_agent_work_state(body: AgentWorkStateUpsert, db: Session = Depends(get_db)):
+@app.post(
+    "/api/agent-work-state",
+    response_model=dict,
+    dependencies=[Depends(_require_api_key)],
+)
+def upsert_agent_work_state(
+    body: AgentWorkStateUpsert,
+    db: Session = Depends(get_db),
+    actor_role: tuple[str, str] = Depends(_actor_from_headers),
+):
     # Upsert by agent_id
     state = db.query(AgentWorkState).filter(AgentWorkState.agent_id == body.agent_id).first()
     if not state:
@@ -121,8 +201,27 @@ def upsert_agent_work_state(body: AgentWorkStateUpsert, db: Session = Depends(ge
     state.blockers = body.blockers
 
     db.add(state)
+    _audit(
+        db,
+        actor=actor_role[0],
+        role=actor_role[1],
+        action="agent_work_state.upsert",
+        entity_type="agent_work_state",
+        entity_id=body.agent_id,
+        payload=body.model_dump(),
+    )
     db.commit()
     return {"ok": True}
+
+
+@app.get("/api/audit", response_model=list[AuditEventOut])
+def list_audit(db: Session = Depends(get_db), limit: int = 200):
+    return (
+        db.query(AuditEvent)
+        .order_by(AuditEvent.created_at.desc())
+        .limit(min(limit, 500))
+        .all()
+    )
 
 
 @app.get("/api/tasks", response_model=list[TaskOut])
@@ -130,8 +229,12 @@ def list_tasks(db: Session = Depends(get_db)):
     return db.query(Task).order_by(Task.priority.desc(), Task.updated_at.desc()).all()
 
 
-@app.post("/api/tasks", response_model=TaskOut)
-def create_task(body: TaskCreate, db: Session = Depends(get_db)):
+@app.post("/api/tasks", response_model=TaskOut, dependencies=[Depends(_require_api_key)])
+def create_task(
+    body: TaskCreate,
+    db: Session = Depends(get_db),
+    actor_role: tuple[str, str] = Depends(_actor_from_headers),
+):
     task = Task(
         id=str(uuid4()),
         title=body.title,
@@ -141,6 +244,15 @@ def create_task(body: TaskCreate, db: Session = Depends(get_db)):
         owner_agent_id=body.owner_agent_id,
     )
     db.add(task)
+    _audit(
+        db,
+        actor=actor_role[0],
+        role=actor_role[1],
+        action="task.create",
+        entity_type="task",
+        entity_id=task.id,
+        payload={"title": task.title, "status": str(task.status), "priority": task.priority},
+    )
     db.commit()
     db.refresh(task)
     return task
@@ -154,8 +266,17 @@ def get_task(task_id: str, db: Session = Depends(get_db)):
     return task
 
 
-@app.patch("/api/tasks/{task_id}", response_model=TaskOut)
-def update_task(task_id: str, body: dict, db: Session = Depends(get_db)):
+@app.patch(
+    "/api/tasks/{task_id}",
+    response_model=TaskOut,
+    dependencies=[Depends(_require_api_key)],
+)
+def update_task(
+    task_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    actor_role: tuple[str, str] = Depends(_actor_from_headers),
+):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -165,6 +286,15 @@ def update_task(task_id: str, body: dict, db: Session = Depends(get_db)):
             setattr(task, field, body[field])
 
     db.add(task)
+    _audit(
+        db,
+        actor=actor_role[0],
+        role=actor_role[1],
+        action="task.update",
+        entity_type="task",
+        entity_id=task.id,
+        payload=body,
+    )
     db.commit()
     db.refresh(task)
     return task
@@ -237,8 +367,11 @@ async def _send_telegram_via_openclaw(text: str) -> tuple[str | None, str | None
         return None, str(e)
 
 
-@app.post("/api/war-room/run")
-async def war_room_run(db: Session = Depends(get_db)):
+@app.post("/api/war-room/run", dependencies=[Depends(_require_api_key)])
+async def war_room_run(
+    db: Session = Depends(get_db),
+    actor_role: tuple[str, str] = Depends(_actor_from_headers),
+):
     """v0 orchestrator.
 
     Creates a WAR_ROOM conversation with multiple turns:
@@ -362,6 +495,15 @@ async def war_room_run(db: Session = Depends(get_db)):
         telegram_topic_id=settings.telegram_topic_id,
     )
     db.add(wr)
+    _audit(
+        db,
+        actor=actor_role[0],
+        role=actor_role[1],
+        action="war_room.run",
+        entity_type="war_room_run",
+        entity_id=run_id,
+        payload={"conversation_id": convo.id, "final_answer": final_answer},
+    )
 
     db.commit()
 

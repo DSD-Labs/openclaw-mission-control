@@ -31,6 +31,9 @@ export const Route = createRootRoute({
             <Link to="/war-room" className="opacity-80 hover:opacity-100">
               War Room
             </Link>
+            <Link to="/audit" className="opacity-80 hover:opacity-100">
+              Audit
+            </Link>
           </nav>
 
           <div className="md:hidden">
@@ -52,6 +55,9 @@ export const Route = createRootRoute({
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link to="/war-room">War Room</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/audit">Audit</Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
