@@ -479,6 +479,37 @@ async def _send_telegram_via_openclaw(text: str) -> tuple[str | None, str | None
         return None, str(e)
 
 
+def _parse_owner_updates(text: str) -> list[dict]:
+    """Parse a batched owner update response.
+
+    Expected blocks separated by '---'. Each block may contain keys:
+    task_title/current_task/status/next_step/blockers
+
+    Returns list of dicts.
+    """
+
+    if not text:
+        return []
+
+    blocks = [b.strip() for b in str(text).split("---") if b.strip()]
+    out: list[dict] = []
+
+    for b in blocks:
+        item: dict[str, str] = {}
+        for line in b.splitlines():
+            if ":" not in line:
+                continue
+            k, v = line.split(":", 1)
+            k = k.strip().lower()
+            v = v.strip()
+            if k in {"task_title", "current_task", "status", "next_step", "blockers"}:
+                item[k] = v
+        if item:
+            out.append(item)
+
+    return out
+
+
 @app.post("/api/war-room/run", dependencies=[Depends(_require_api_key)])
 async def war_room_run(
     db: Session = Depends(get_db),
@@ -636,6 +667,61 @@ async def war_room_run(
 
                 if assistant_msg:
                     add_turn("agent", str(assistant_msg), speaker_id=owner.id)
+
+                    # Parse structured updates and update AgentWorkState + (optionally) task statuses
+                    parsed = _parse_owner_updates(str(assistant_msg))
+                    if parsed:
+                        # pick a representative current task for the agent work state
+                        # prefer the highest priority task title in this owner batch
+                        top = sorted(owner_tasks, key=lambda x: x.priority, reverse=True)[0]
+
+                        # Find matching parsed item (by task_title or current_task)
+                        best = None
+                        for it in parsed:
+                            tt = (it.get("task_title") or "").strip()
+                            if tt and tt.lower() == top.title.lower():
+                                best = it
+                                break
+                        if not best:
+                            best = parsed[0]
+
+                        state = (
+                            db.query(AgentWorkState)
+                            .filter(AgentWorkState.agent_id == owner.id)
+                            .first()
+                        )
+                        if not state:
+                            state = AgentWorkState(agent_id=owner.id)
+
+                        state.task_id = top.id
+                        state.status = best.get("status", "working")
+                        state.next_step = best.get("next_step", "")
+                        state.blockers = best.get("blockers", "")
+                        db.add(state)
+
+                        # If APPLY_WAR_ROOM_MOVES is enabled, also mark tasks blocked/unblocked based on blockers
+                        if settings.apply_war_room_moves:
+                            for it in parsed:
+                                title = (it.get("task_title") or it.get("current_task") or "").strip()
+                                if not title:
+                                    continue
+                                # match task by title within this owner's tasks
+                                match = None
+                                for ot in owner_tasks:
+                                    if ot.title.lower() == title.lower():
+                                        match = ot
+                                        break
+                                if not match:
+                                    continue
+                                blockers = (it.get("blockers") or "").strip().lower()
+                                if blockers and blockers not in {"none", "n/a", "na", "no"}:
+                                    match.status = "BLOCKED"
+                                else:
+                                    # keep DONE as DONE, otherwise set to DOING
+                                    if match.status != "DONE":
+                                        match.status = "DOING"
+                                db.add(match)
+
                 else:
                     add_turn("system", f"Timed out waiting for agent response (session {child_key}).")
 
