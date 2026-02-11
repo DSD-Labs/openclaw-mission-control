@@ -10,6 +10,7 @@ from .schemas import (
     AgentCreate,
     AgentOut,
     ConversationCreate,
+    ConversationOut,
     TaskCreate,
     TaskOut,
     TurnCreate,
@@ -91,18 +92,21 @@ def create_conversation(body: ConversationCreate, db: Session = Depends(get_db))
     return convo
 
 
-@app.get("/api/conversations/{conversation_id}")
+@app.get("/api/conversations/{conversation_id}", response_model=ConversationOut)
 def get_conversation(conversation_id: str, db: Session = Depends(get_db)):
     convo = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     if not convo:
-        return None
+        # Let FastAPI return a 200 null for v0; later we can make this a 404
+        return None  # type: ignore[return-value]
+
     turns = (
         db.query(Turn)
         .filter(Turn.conversation_id == conversation_id)
         .order_by(Turn.created_at.asc())
         .all()
     )
-    return {"id": convo.id, "type": convo.type, "task_id": convo.task_id, "turns": turns}
+
+    return ConversationOut(id=convo.id, type=convo.type, task_id=convo.task_id, turns=turns)
 
 
 @app.post("/api/conversations/{conversation_id}/turns", response_model=TurnOut)

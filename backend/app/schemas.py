@@ -105,6 +105,17 @@ class TurnOut(BaseModel):
     speaker_id: str | None
     content: str
     tool_events: dict | None
+    created_at: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class ConversationOut(BaseModel):
+    id: str
+    type: ConversationType
+    task_id: str | None
+    turns: list[TurnOut]
 
     class Config:
         from_attributes = True
