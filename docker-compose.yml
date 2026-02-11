@@ -17,6 +17,8 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: /mc
     depends_on:
       - api
     restart: unless-stopped

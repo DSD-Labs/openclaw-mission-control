@@ -2,6 +2,10 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 
+# Build-time env (path prefix proxy)
+ARG VITE_API_URL=/mc
+ENV VITE_API_URL=${VITE_API_URL}
+
 COPY frontend/package.json frontend/package-lock.json /app/
 RUN npm ci
 
