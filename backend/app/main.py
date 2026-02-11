@@ -112,6 +112,30 @@ def create_task(body: TaskCreate, db: Session = Depends(get_db)):
     return task
 
 
+@app.get("/api/tasks/{task_id}", response_model=TaskOut)
+def get_task(task_id: str, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@app.patch("/api/tasks/{task_id}", response_model=TaskOut)
+def update_task(task_id: str, body: dict, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    for field in ["title", "description", "status", "priority", "owner_agent_id"]:
+        if field in body:
+            setattr(task, field, body[field])
+
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
 @app.post("/api/conversations")
 def create_conversation(body: ConversationCreate, db: Session = Depends(get_db)):
     convo = Conversation(id=str(uuid4()), type=body.type, task_id=body.task_id)
