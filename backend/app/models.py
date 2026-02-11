@@ -237,6 +237,10 @@ class Workspace(Base):
 
     gateway_id: Mapped[str | None] = mapped_column(String, ForeignKey("gateways.id"), nullable=True)
 
+    # Default Telegram destination for this workspace (optional; falls back to env)
+    telegram_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    telegram_topic_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships (optional)

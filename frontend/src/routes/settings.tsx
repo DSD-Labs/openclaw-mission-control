@@ -33,6 +33,8 @@ type Workspace = {
   id: string;
   name: string;
   gateway_id?: string | null;
+  telegram_chat_id?: string | null;
+  telegram_topic_id?: string | null;
   created_at?: string | null;
 };
 
@@ -52,7 +54,7 @@ export default function SettingsPage() {
   });
 
   const [gwForm, setGwForm] = useState({ name: "", url: "", token: "", enabled: true });
-  const [wsForm, setWsForm] = useState({ name: "", gateway_id: "" });
+  const [wsForm, setWsForm] = useState({ name: "", gateway_id: "", telegram_chat_id: "", telegram_topic_id: "" });
 
   const createGateway = useMutation({
     mutationFn: (body: typeof gwForm) => apiPost<Gateway>("/api/gateways", body),
@@ -63,10 +65,14 @@ export default function SettingsPage() {
   });
 
   const createWorkspace = useMutation({
-    mutationFn: (body: { name: string; gateway_id?: string | null }) =>
-      apiPost<Workspace>("/api/workspaces", body),
+    mutationFn: (body: {
+      name: string;
+      gateway_id?: string | null;
+      telegram_chat_id?: string | null;
+      telegram_topic_id?: string | null;
+    }) => apiPost<Workspace>("/api/workspaces", body),
     onSuccess: async () => {
-      setWsForm({ name: "", gateway_id: "" });
+      setWsForm({ name: "", gateway_id: "", telegram_chat_id: "", telegram_topic_id: "" });
       await qc.invalidateQueries({ queryKey: ["workspaces"] });
     },
   });
@@ -191,12 +197,33 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <label className="text-sm font-semibold">Telegram chat id (optional)</label>
+                  <Input
+                    value={wsForm.telegram_chat_id}
+                    onChange={(e) => setWsForm((f) => ({ ...f, telegram_chat_id: e.target.value }))}
+                    placeholder="-100..."
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-semibold">Telegram topic id (optional)</label>
+                  <Input
+                    value={wsForm.telegram_topic_id}
+                    onChange={(e) => setWsForm((f) => ({ ...f, telegram_topic_id: e.target.value }))}
+                    placeholder="2298"
+                  />
+                </div>
+              </div>
               <div className="flex items-center justify-end">
                 <Button
                   onClick={() =>
                     createWorkspace.mutate({
                       name: wsForm.name,
                       gateway_id: wsForm.gateway_id || null,
+                      telegram_chat_id: wsForm.telegram_chat_id || null,
+                      telegram_topic_id: wsForm.telegram_topic_id || null,
                     })
                   }
                   disabled={createWorkspace.isPending || !wsForm.name}
@@ -223,6 +250,7 @@ export default function SettingsPage() {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Gateway</TableHead>
+                      <TableHead>Telegram</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -230,6 +258,9 @@ export default function SettingsPage() {
                       <TableRow key={w.id}>
                         <TableCell className="font-semibold">{w.name}</TableCell>
                         <TableCell className="font-mono text-xs">{w.gateway_id ?? "—"}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {(w.telegram_chat_id ?? "—") + (w.telegram_topic_id ? ` / ${w.telegram_topic_id}` : "")}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

@@ -187,12 +187,16 @@ class GatewayOut(BaseModel):
 class WorkspaceCreate(BaseModel):
     name: str
     gateway_id: str | None = None
+    telegram_chat_id: str | None = None
+    telegram_topic_id: str | None = None
 
 
 class WorkspaceOut(BaseModel):
     id: str
     name: str
     gateway_id: str | None
+    telegram_chat_id: str | None
+    telegram_topic_id: str | None
     created_at: str | None = None
 
     class Config:

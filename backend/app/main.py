@@ -172,6 +172,41 @@ def list_workspaces(db: Session = Depends(get_db)):
     return db.query(Workspace).order_by(Workspace.created_at.desc()).all()
 
 
+@app.patch(
+    "/api/workspaces/{workspace_id}",
+    response_model=WorkspaceOut,
+    dependencies=[Depends(_require_api_key), Depends(_require_role({"admin"}))],
+)
+def update_workspace(
+    workspace_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    actor_role: tuple[str, str] = Depends(_actor_from_headers),
+):
+    ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    for field in ["name", "gateway_id", "telegram_chat_id", "telegram_topic_id"]:
+        if field in body:
+            setattr(ws, field, body[field])
+
+    db.add(ws)
+    _audit(
+        db,
+        actor=actor_role[0],
+        role=actor_role[1],
+        workspace_id=ws.id,
+        action="workspace.update",
+        entity_type="workspace",
+        entity_id=ws.id,
+        payload=body,
+    )
+    db.commit()
+    db.refresh(ws)
+    return ws
+
+
 @app.post(
     "/api/workspaces",
     response_model=WorkspaceOut,
@@ -182,7 +217,13 @@ def create_workspace(
     db: Session = Depends(get_db),
     actor_role: tuple[str, str] = Depends(_actor_from_headers),
 ):
-    ws = Workspace(id=str(uuid4()), name=body.name, gateway_id=body.gateway_id)
+    ws = Workspace(
+        id=str(uuid4()),
+        name=body.name,
+        gateway_id=body.gateway_id,
+        telegram_chat_id=body.telegram_chat_id,
+        telegram_topic_id=body.telegram_topic_id,
+    )
     db.add(ws)
     _audit(
         db,
@@ -192,7 +233,12 @@ def create_workspace(
         action="workspace.create",
         entity_type="workspace",
         entity_id=ws.id,
-        payload={"name": ws.name, "gateway_id": ws.gateway_id},
+        payload={
+            "name": ws.name,
+            "gateway_id": ws.gateway_id,
+            "telegram_chat_id": ws.telegram_chat_id,
+            "telegram_topic_id": ws.telegram_topic_id,
+        },
     )
     db.commit()
     db.refresh(ws)
@@ -556,19 +602,24 @@ def get_war_room_run(
 # --- War Room ---
 
 
-async def _send_telegram_via_openclaw(text: str) -> tuple[str | None, str | None]:
+async def _send_telegram_via_openclaw(
+    text: str,
+    *,
+    chat_id: str | None,
+    topic_id: str | None,
+) -> tuple[str | None, str | None]:
     oc = get_openclaw()
     if not oc:
         return None, "OPENCLAW_GATEWAY_URL/TOKEN not configured"
-    if not settings.telegram_chat_id:
+    if not chat_id:
         return None, "TELEGRAM_CHAT_ID not configured"
 
     try:
         result = await oc.message_send(
             channel="telegram",
-            target=settings.telegram_chat_id,
+            target=chat_id,
             text=text,
-            thread_id=settings.telegram_topic_id,
+            thread_id=topic_id,
         )
         message_id = None
         if isinstance(result, dict):
@@ -888,14 +939,26 @@ async def war_room_run(
     )
 
     run_id = str(uuid4())
+    # Workspace overrides for Telegram destination
+    ws_tg_chat = None
+    ws_tg_topic = None
+    if workspace_id:
+        ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+        if ws:
+            ws_tg_chat = ws.telegram_chat_id
+            ws_tg_topic = ws.telegram_topic_id
+
+    tg_chat = ws_tg_chat or settings.telegram_chat_id
+    tg_topic = ws_tg_topic or settings.telegram_topic_id
+
     wr = WarRoomRun(
         id=run_id,
         workspace_id=workspace_id,
         conversation_id=convo.id,
         final_answer=final_answer,
         summary_json=decision,
-        telegram_chat_id=settings.telegram_chat_id,
-        telegram_topic_id=settings.telegram_topic_id,
+        telegram_chat_id=tg_chat,
+        telegram_topic_id=tg_topic,
     )
     db.add(wr)
     _audit(
@@ -912,7 +975,11 @@ async def war_room_run(
     db.commit()
 
     try:
-        message_id, err = await _send_telegram_via_openclaw(final_answer)
+        message_id, err = await _send_telegram_via_openclaw(
+            final_answer,
+            chat_id=tg_chat,
+            topic_id=tg_topic,
+        )
         if message_id:
             wr.telegram_message_id = str(message_id)
         if err:
