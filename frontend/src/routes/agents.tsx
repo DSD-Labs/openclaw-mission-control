@@ -19,6 +19,13 @@ type Agent = {
   enabled: boolean;
   skills_allow: string[];
   execution_policy: { default?: string; by_skill?: Record<string, string> };
+  work_state?: {
+    task_id?: string | null;
+    status: string;
+    next_step: string;
+    blockers: string;
+    updated_at?: string | null;
+  } | null;
 };
 
 type AgentCreate = {
@@ -206,6 +213,15 @@ function AgentsPage() {
                 </div>
               </div>
               <div className="text-xs text-muted-foreground">id: {a.id}</div>
+              <div className="text-xs text-muted-foreground">
+                working on: {a.work_state?.task_id ?? "—"} · status: {a.work_state?.status ?? "idle"}
+              </div>
+              {a.work_state?.next_step ? (
+                <div className="text-xs text-muted-foreground">next: {a.work_state.next_step}</div>
+              ) : null}
+              {a.work_state?.blockers ? (
+                <div className="text-xs text-destructive">blockers: {a.work_state.blockers}</div>
+              ) : null}
               <div className="text-xs text-muted-foreground">
                 skills: {(a.skills_allow ?? []).join(", ") || "—"}
               </div>

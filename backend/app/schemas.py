@@ -43,6 +43,17 @@ class AgentCreate(BaseModel):
     output_contract: AgentOutputContract = Field(default_factory=AgentOutputContract)
 
 
+class AgentWorkStateOut(BaseModel):
+    task_id: str | None = None
+    status: str
+    next_step: str
+    blockers: str
+    updated_at: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class AgentOut(BaseModel):
     id: str
     name: str
@@ -55,6 +66,8 @@ class AgentOut(BaseModel):
     execution_policy: dict
     constraints: dict
     output_contract: dict
+
+    work_state: AgentWorkStateOut | None = None
 
     class Config:
         from_attributes = True
@@ -109,6 +122,14 @@ class TurnOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AgentWorkStateUpsert(BaseModel):
+    agent_id: str
+    task_id: str | None = None
+    status: str = "idle"
+    next_step: str = ""
+    blockers: str = ""
 
 
 class ConversationOut(BaseModel):

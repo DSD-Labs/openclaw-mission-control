@@ -41,15 +41,9 @@ class Agent(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Deny-by-default allowlist of skills/tools this agent may access.
-    # Store as JSON array of strings (we keep it flexible as JSON).
     skills_allow: Mapped[list] = mapped_column(JSON, default=list)
 
     # Execution policy controls whether the agent may execute tools or must propose.
-    # Shape (example):
-    # {
-    #   "default": "propose",
-    #   "bySkill": {"github": "execute", "coolify": "propose"}
-    # }
     execution_policy: Mapped[dict] = mapped_column(JSON, default=dict)
 
     # Additional constraints: budgets, forbidden actions, data boundaries, etc.
@@ -64,6 +58,9 @@ class Agent(Base):
     )
 
     tasks: Mapped[list["Task"]] = relationship(back_populates="owner_agent")
+    work_state: Mapped["AgentWorkState" | None] = relationship(
+        back_populates="agent", uselist=False
+    )
 
 
 class Task(Base):
@@ -84,6 +81,23 @@ class Task(Base):
     )
 
     conversation: Mapped["Conversation" | None] = relationship(back_populates="task")
+
+
+class AgentWorkState(Base):
+    __tablename__ = "agent_work_states"
+
+    agent_id: Mapped[str] = mapped_column(String, ForeignKey("agents.id"), primary_key=True)
+    agent: Mapped[Agent] = relationship(back_populates="work_state")
+
+    task_id: Mapped[str | None] = mapped_column(String, ForeignKey("tasks.id"), nullable=True)
+
+    # "thinking" | "executing" | "waiting" | "blocked" | ...
+    status: Mapped[str] = mapped_column(String, default="idle")
+
+    next_step: Mapped[str] = mapped_column(Text, default="")
+    blockers: Mapped[str] = mapped_column(Text, default="")
+
+    updated_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class Conversation(Base):

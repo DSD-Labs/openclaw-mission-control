@@ -8,10 +8,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from .db import engine, get_db
-from .models import Base, Conversation, ConversationType, Task, Turn, Agent, WarRoomRun
+from .models import (
+    Base,
+    Conversation,
+    ConversationType,
+    Task,
+    Turn,
+    Agent,
+    WarRoomRun,
+    AgentWorkState,
+)
 from .schemas import (
     AgentCreate,
     AgentOut,
+    AgentWorkStateUpsert,
     ConversationCreate,
     ConversationOut,
     TaskCreate,
@@ -42,7 +52,11 @@ def health():
 
 @app.get("/api/agents", response_model=list[AgentOut])
 def list_agents(db: Session = Depends(get_db)):
-    return db.query(Agent).order_by(Agent.updated_at.desc()).all()
+    agents = db.query(Agent).order_by(Agent.updated_at.desc()).all()
+    # ensure work_state relationship loads (sqlite is fine; later optimize)
+    for a in agents:
+        _ = a.work_state
+    return agents
 
 
 @app.post("/api/agents", response_model=AgentOut)
@@ -92,6 +106,23 @@ def update_agent(agent_id: str, body: dict, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(agent)
     return agent
+
+
+@app.post("/api/agent-work-state", response_model=dict)
+def upsert_agent_work_state(body: AgentWorkStateUpsert, db: Session = Depends(get_db)):
+    # Upsert by agent_id
+    state = db.query(AgentWorkState).filter(AgentWorkState.agent_id == body.agent_id).first()
+    if not state:
+        state = AgentWorkState(agent_id=body.agent_id)
+
+    state.task_id = body.task_id
+    state.status = body.status
+    state.next_step = body.next_step
+    state.blockers = body.blockers
+
+    db.add(state)
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/api/tasks", response_model=list[TaskOut])
