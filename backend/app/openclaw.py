@@ -28,7 +28,7 @@ class OpenClawClient:
         if session_key:
             payload["sessionKey"] = session_key
 
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             res = await client.post(self._tools_invoke_url, headers=self._headers, json=payload)
             res.raise_for_status()
             data = res.json()

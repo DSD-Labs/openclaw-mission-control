@@ -21,6 +21,7 @@ from .models import (
     Workspace,
 )
 from .openclaw import get_openclaw
+from .openclaw_status import probe_openclaw, status_dict
 from .schemas import (
     AgentCreate,
     AgentOut,
@@ -112,6 +113,12 @@ app.add_middleware(
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/api/openclaw/status")
+async def openclaw_status():
+    st = await probe_openclaw()
+    return status_dict(st)
 
 
 # --- Gateways / Workspaces (v0) ---
