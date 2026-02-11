@@ -5,6 +5,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
+from .crypto import CryptoError, encrypt_token
 from .db import engine, get_db
 from .models import (
     Agent,
@@ -116,11 +117,16 @@ def create_gateway(
     db: Session = Depends(get_db),
     actor_role: tuple[str, str] = Depends(_actor_from_headers),
 ):
+    try:
+        token_enc = encrypt_token(body.token)
+    except CryptoError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     gw = Gateway(
         id=str(uuid4()),
         name=body.name,
         url=body.url,
-        token=body.token,
+        token=token_enc,
         enabled=body.enabled,
     )
     db.add(gw)

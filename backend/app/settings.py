@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # War room behavior
     apply_war_room_moves: bool = False
 
+    # Secrets
+    # Used to encrypt gateway tokens at rest (Fernet key).
+    # Generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+    gateway_token_key: str | None = None
+
     # alias for env var APPLY_WAR_ROOM_MOVES
     # (pydantic-settings maps automatically from APPLY_WAR_ROOM_MOVES -> apply_war_room_moves)
 

@@ -213,7 +213,7 @@ class Gateway(Base):
     name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     url: Mapped[str] = mapped_column(String, nullable=False)
 
-    # NOTE: v0 stores token plaintext in DB. Next: encrypt at rest / KMS.
+    # Encrypted gateway token (Fernet). Never return via API.
     token: Mapped[str] = mapped_column(String, nullable=False)
 
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
