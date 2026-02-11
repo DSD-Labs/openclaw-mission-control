@@ -71,7 +71,7 @@ class Agent(Base):
     )
 
     tasks: Mapped[list["Task"]] = relationship(back_populates="owner_agent")
-    work_state: Mapped["AgentWorkState" | None] = relationship(
+    work_state: Mapped["AgentWorkState | None"] = relationship(
         back_populates="agent", uselist=False
     )
 
@@ -102,7 +102,7 @@ class Task(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    conversation: Mapped["Conversation" | None] = relationship(back_populates="task")
+    conversation: Mapped["Conversation | None"] = relationship(back_populates="task")
 
 
 class AgentWorkState(Base):
