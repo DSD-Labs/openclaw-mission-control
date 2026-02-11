@@ -179,16 +179,117 @@ def add_turn(conversation_id: str, body: TurnCreate, db: Session = Depends(get_d
 
 
 @app.post("/api/war-room/run")
-def war_room_run_stub(db: Session = Depends(get_db)):
+def war_room_run(db: Session = Depends(get_db)):
+    """v0 orchestrator.
+
+    Creates a WAR_ROOM conversation with multiple turns:
+    - Chair opening
+    - Snapshot of DOING/BLOCKED tasks
+    - Chair questions to each owner (or unassigned)
+    - Mocked agent updates (placeholder until OpenClaw adapter is wired)
+    - Chair decisions + proposed task moves
+    """
+
     convo = Conversation(id=str(uuid4()), type=ConversationType.WAR_ROOM)
     db.add(convo)
-    db.add(
-        Turn(
-            id=str(uuid4()),
-            conversation_id=convo.id,
-            speaker_type="system",
-            content="War room run stub created. Next: wire OpenClaw adapter + Telegram posting.",
-        )
+
+    agents = db.query(Agent).order_by(Agent.name.asc()).all()
+    agents_by_id = {a.id: a for a in agents}
+
+    tasks = (
+        db.query(Task)
+        .filter(Task.status.in_(["DOING", "BLOCKED"]))
+        .order_by(Task.status.asc(), Task.priority.desc(), Task.updated_at.desc())
+        .all()
     )
+
+    def add_turn(speaker_type: str, content: str, speaker_id: str | None = None):
+        db.add(
+            Turn(
+                id=str(uuid4()),
+                conversation_id=convo.id,
+                speaker_type=speaker_type,
+                speaker_id=speaker_id,
+                content=content,
+            )
+        )
+
+    add_turn(
+        "chair",
+        "War Room started. Objective: sync on DOING/BLOCKED tasks, unblock work, and assign next steps.",
+    )
+
+    if not tasks:
+        add_turn(
+            "chair",
+            "No DOING/BLOCKED tasks right now. Create tasks on the Kanban to drive work.",
+        )
+        db.commit()
+        return {"ok": True, "conversationId": convo.id}
+
+    snapshot_lines = ["Current focus (DOING/BLOCKED):"]
+    for t in tasks:
+        owner = agents_by_id.get(t.owner_agent_id) if t.owner_agent_id else None
+        snapshot_lines.append(
+            f"- [{t.status}] {t.title} (prio {t.priority}) — owner: {owner.name if owner else 'Unassigned'}"
+        )
+    add_turn("chair", "\n".join(snapshot_lines))
+
+    # Ask for updates
+    for t in tasks:
+        owner = agents_by_id.get(t.owner_agent_id) if t.owner_agent_id else None
+        who = owner.name if owner else "(unassigned)"
+        add_turn(
+            "chair",
+            "\n".join(
+                [
+                    f"Update request for task: {t.title}",
+                    f"Owner: {who}",
+                    "Please reply with: current_task, status, next_step, blockers.",
+                ]
+            ),
+        )
+
+        # Mocked agent response (until OpenClaw adapter exists)
+        if owner:
+            add_turn(
+                "agent",
+                "\n".join(
+                    [
+                        f"current_task: {t.title}",
+                        f"status: working (mocked update)",
+                        "next_step: provide real update once OpenClaw adapter is wired",
+                        "blockers: none reported (mocked)",
+                    ]
+                ),
+                speaker_id=owner.id,
+            )
+        else:
+            add_turn(
+                "system",
+                "No agent assigned. Chair should assign an owner or move task back to READY.",
+            )
+
+    # Chair decisions + proposed moves
+    moves = []
+    for t in tasks:
+        if not t.owner_agent_id:
+            moves.append({"taskId": t.id, "from": t.status, "to": "READY", "reason": "Needs owner"})
+        elif t.status == "BLOCKED":
+            moves.append({"taskId": t.id, "from": "BLOCKED", "to": "DOING", "reason": "Assume unblock after check"})
+
+    decision = {
+        "decisions": [
+            "Use Kanban as the source of truth; every task must have an owner.",
+            "All agent updates must be logged as transcript turns.",
+        ],
+        "proposed_task_moves": moves,
+        "final_answer_for_telegram": "War Room complete. Next steps assigned in Mission Control. (Telegram posting wired in next milestone.)",
+    }
+    add_turn(
+        "chair",
+        "Chair summary (v0):\n```json\n" + __import__("json").dumps(decision, indent=2) + "\n```",
+    )
+
     db.commit()
     return {"ok": True, "conversationId": convo.id}

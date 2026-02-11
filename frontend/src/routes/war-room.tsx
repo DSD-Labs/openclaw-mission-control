@@ -1,12 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { apiPost } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type WarRoomRun = { ok: boolean; conversationId: string };
+
+type Turn = {
+  id: string;
+  speaker_type: string;
+  speaker_id?: string | null;
+  content: string;
+  created_at?: string | null;
+};
+
+type Conversation = {
+  id: string;
+  type: string;
+  task_id?: string | null;
+  turns: Turn[];
+};
 
 export const Route = createFileRoute("/war-room")({
   component: WarRoomPage,
@@ -17,11 +32,17 @@ function WarRoomPage() {
     mutationFn: () => apiPost<WarRoomRun>("/api/war-room/run"),
   });
 
+  const convoQ = useQuery({
+    queryKey: ["conversation", run.data?.conversationId],
+    queryFn: () => apiGet<Conversation>(`/api/conversations/${run.data!.conversationId}`),
+    enabled: !!run.data?.conversationId,
+  });
+
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-black tracking-tight">War Room</h1>
-        <Badge variant="secondary">stub</Badge>
+        <Badge variant="secondary">v0</Badge>
       </div>
 
       <Card>
@@ -30,7 +51,7 @@ function WarRoomPage() {
         </CardHeader>
         <CardContent className="grid gap-3">
           <div className="text-sm text-muted-foreground">
-            v0 stub: creates a WAR_ROOM conversation and a system turn.
+            Runs the Chair orchestrator and logs a multi-turn transcript.
           </div>
 
           <div>
@@ -48,6 +69,27 @@ function WarRoomPage() {
           {run.error && <div className="text-sm text-destructive">{String(run.error)}</div>}
         </CardContent>
       </Card>
+
+      {convoQ.data && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Transcript</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {convoQ.data.turns.map((t) => (
+              <div key={t.id} className="rounded-lg border p-3">
+                <div className="text-xs font-semibold text-muted-foreground">
+                  {t.speaker_type}
+                  {t.speaker_id ? `:${t.speaker_id}` : ""}
+                </div>
+                <pre className="mt-2 whitespace-pre-wrap text-sm leading-snug">
+                  {t.content}
+                </pre>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
