@@ -1,8 +1,9 @@
 import json
 from uuid import uuid4
 
-import httpx
 from fastapi import Depends, FastAPI, HTTPException
+
+from .openclaw import get_openclaw
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -182,50 +183,25 @@ def add_turn(conversation_id: str, body: TurnCreate, db: Session = Depends(get_d
 
 @app.post("/api/war-room/run")
 async def _send_telegram_via_openclaw(text: str) -> tuple[str | None, str | None]:
-    """Send a Telegram message via the OpenClaw Gateway Tools Invoke API.
+    """Send a Telegram message via OpenClaw Gateway tools/invoke (message tool)."""
 
-    Returns: (message_id, error)
-    """
-
-    if not settings.openclaw_gateway_url or not settings.openclaw_gateway_token:
+    oc = get_openclaw()
+    if not oc:
         return None, "OPENCLAW_GATEWAY_URL/TOKEN not configured"
     if not settings.telegram_chat_id:
         return None, "TELEGRAM_CHAT_ID not configured"
 
-    url = settings.openclaw_gateway_url.rstrip("/") + "/tools/invoke"
-    headers = {
-        "authorization": f"Bearer {settings.openclaw_gateway_token}",
-        "content-type": "application/json",
-        # Help group policies resolve context if needed
-        "x-openclaw-message-channel": "telegram",
-    }
-
-    args = {
-        "action": "send",
-        "channel": "telegram",
-        "target": settings.telegram_chat_id,
-        "message": text,
-    }
-    if settings.telegram_topic_id:
-        args["threadId"] = settings.telegram_topic_id
-
-    payload = {
-        "tool": "message",
-        "args": args,
-    }
-
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            res = await client.post(url, headers=headers, json=payload)
-            if res.status_code != 200:
-                return None, f"OpenClaw gateway error {res.status_code}: {res.text[:400]}"
-            data = res.json()
-            result = data.get("result")
-            # message tool returns provider-specific payload; best-effort extraction
-            message_id = None
-            if isinstance(result, dict):
-                message_id = result.get("messageId") or result.get("id")
-            return message_id, None
+        result = await oc.message_send(
+            channel="telegram",
+            target=settings.telegram_chat_id,
+            text=text,
+            thread_id=settings.telegram_topic_id,
+        )
+        message_id = None
+        if isinstance(result, dict):
+            message_id = result.get("messageId") or result.get("id")
+        return (str(message_id) if message_id else None), None
     except Exception as e:
         return None, str(e)
 
