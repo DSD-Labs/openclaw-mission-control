@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import enum
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, func
