@@ -359,6 +359,37 @@ def get_task(task_id: str, db: Session = Depends(get_db)):
     return task
 
 
+@app.get("/api/tasks/{task_id}/conversation", response_model=ConversationOut)
+def get_or_create_task_conversation(
+    task_id: str,
+    db: Session = Depends(get_db),
+    workspace_id: str | None = Depends(_workspace_from_header),
+):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    convo = db.query(Conversation).filter(Conversation.task_id == task_id).first()
+    if not convo:
+        convo = Conversation(
+            id=str(uuid4()),
+            workspace_id=workspace_id,
+            type=ConversationType.TASK,
+            task_id=task_id,
+        )
+        db.add(convo)
+        db.commit()
+        db.refresh(convo)
+
+    turns = (
+        db.query(Turn)
+        .filter(Turn.conversation_id == convo.id)
+        .order_by(Turn.created_at.asc())
+        .all()
+    )
+    return ConversationOut(id=convo.id, type=convo.type, task_id=convo.task_id, turns=turns)
+
+
 @app.patch(
     "/api/tasks/{task_id}",
     response_model=TaskOut,

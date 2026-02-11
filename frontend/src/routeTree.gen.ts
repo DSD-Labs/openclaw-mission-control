@@ -15,6 +15,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TasksTaskIdRouteImport } from './routes/tasks.$taskId'
 
 const WarRoomRoute = WarRoomRouteImport.update({
   id: '/war-room',
@@ -46,22 +47,29 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TasksTaskIdRoute = TasksTaskIdRouteImport.update({
+  id: '/$taskId',
+  path: '/$taskId',
+  getParentRoute: () => TasksRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/audit': typeof AuditRoute
   '/settings': typeof SettingsRoute
-  '/tasks': typeof TasksRoute
+  '/tasks': typeof TasksRouteWithChildren
   '/war-room': typeof WarRoomRoute
+  '/tasks/$taskId': typeof TasksTaskIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/audit': typeof AuditRoute
   '/settings': typeof SettingsRoute
-  '/tasks': typeof TasksRoute
+  '/tasks': typeof TasksRouteWithChildren
   '/war-room': typeof WarRoomRoute
+  '/tasks/$taskId': typeof TasksTaskIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -69,14 +77,29 @@ export interface FileRoutesById {
   '/agents': typeof AgentsRoute
   '/audit': typeof AuditRoute
   '/settings': typeof SettingsRoute
-  '/tasks': typeof TasksRoute
+  '/tasks': typeof TasksRouteWithChildren
   '/war-room': typeof WarRoomRoute
+  '/tasks/$taskId': typeof TasksTaskIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/agents' | '/audit' | '/settings' | '/tasks' | '/war-room'
+  fullPaths:
+    | '/'
+    | '/agents'
+    | '/audit'
+    | '/settings'
+    | '/tasks'
+    | '/war-room'
+    | '/tasks/$taskId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/agents' | '/audit' | '/settings' | '/tasks' | '/war-room'
+  to:
+    | '/'
+    | '/agents'
+    | '/audit'
+    | '/settings'
+    | '/tasks'
+    | '/war-room'
+    | '/tasks/$taskId'
   id:
     | '__root__'
     | '/'
@@ -85,6 +108,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tasks'
     | '/war-room'
+    | '/tasks/$taskId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -92,7 +116,7 @@ export interface RootRouteChildren {
   AgentsRoute: typeof AgentsRoute
   AuditRoute: typeof AuditRoute
   SettingsRoute: typeof SettingsRoute
-  TasksRoute: typeof TasksRoute
+  TasksRoute: typeof TasksRouteWithChildren
   WarRoomRoute: typeof WarRoomRoute
 }
 
@@ -140,15 +164,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tasks/$taskId': {
+      id: '/tasks/$taskId'
+      path: '/$taskId'
+      fullPath: '/tasks/$taskId'
+      preLoaderRoute: typeof TasksTaskIdRouteImport
+      parentRoute: typeof TasksRoute
+    }
   }
 }
+
+interface TasksRouteChildren {
+  TasksTaskIdRoute: typeof TasksTaskIdRoute
+}
+
+const TasksRouteChildren: TasksRouteChildren = {
+  TasksTaskIdRoute: TasksTaskIdRoute,
+}
+
+const TasksRouteWithChildren = TasksRoute._addFileChildren(TasksRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentsRoute: AgentsRoute,
   AuditRoute: AuditRoute,
   SettingsRoute: SettingsRoute,
-  TasksRoute: TasksRoute,
+  TasksRoute: TasksRouteWithChildren,
   WarRoomRoute: WarRoomRoute,
 }
 export const routeTree = rootRouteImport

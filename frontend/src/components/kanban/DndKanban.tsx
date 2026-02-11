@@ -13,6 +13,7 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useMemo, useState } from "react";
 
+import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 
 export type TaskStatus = "BACKLOG" | "READY" | "DOING" | "BLOCKED" | "REVIEW" | "DONE";
@@ -44,7 +45,16 @@ function DraggableTaskCard({ task }: { task: KanbanTask }) {
       {...listeners}
       {...attributes}
     >
-      <div className="text-sm font-extrabold leading-tight">{task.title}</div>
+      <div className="text-sm font-extrabold leading-tight">
+        <Link
+          to="/tasks/$taskId"
+          params={{ taskId: task.id }}
+          className="underline decoration-muted-foreground/40 underline-offset-4 hover:decoration-muted-foreground"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {task.title}
+        </Link>
+      </div>
       <div className="text-xs text-muted-foreground">prio: {task.priority}</div>
       <div className="truncate text-[11px] text-muted-foreground">id: {task.id}</div>
     </div>
