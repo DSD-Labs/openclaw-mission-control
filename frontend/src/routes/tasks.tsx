@@ -172,14 +172,14 @@ function TasksPage() {
                   <div className="grid gap-2">
                     <label className="text-sm font-semibold">Owner</label>
                     <Select
-                      value={form.owner_agent_id ?? ""}
-                      onValueChange={(v: string) => setForm((f) => ({ ...f, owner_agent_id: v || null }))}
+                      value={form.owner_agent_id ?? "__none__"}
+                      onValueChange={(v: string) => setForm((f) => ({ ...f, owner_agent_id: v === "__none__" ? null : v }))}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Unassigned" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Unassigned</SelectItem>
+                        <SelectItem value="__none__">Unassigned</SelectItem>
                         {agents.map((a) => (
                           <SelectItem key={a.id} value={a.id}>
                             {a.name}
@@ -270,16 +270,19 @@ function TasksPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Select
-                    value={t.owner_agent_id ?? ""}
+                    value={t.owner_agent_id ?? "__none__"}
                     onValueChange={(v: string) =>
-                      patch.mutate({ id: t.id, patch: { owner_agent_id: v || null } })
+                      patch.mutate({
+                        id: t.id,
+                        patch: { owner_agent_id: v === "__none__" ? null : v },
+                      })
                     }
                   >
                     <SelectTrigger className="h-8 w-[180px]">
                       <SelectValue placeholder="Unassigned" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Unassigned</SelectItem>
+                      <SelectItem value="__none__">Unassigned</SelectItem>
                       {agents.map((a) => (
                         <SelectItem key={a.id} value={a.id}>
                           {a.name}

@@ -42,15 +42,16 @@ export function WorkspaceSwitcher() {
     <Select
       value={value}
       onValueChange={(v: string) => {
-        setValue(v);
-        setWs.mutate(v);
+        const next = v === "__none__" ? "" : v;
+        setValue(next);
+        setWs.mutate(next);
       }}
     >
       <SelectTrigger className="h-8 w-[220px]">
         <SelectValue placeholder="Workspace" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="">(All / none)</SelectItem>
+        <SelectItem value="__none__">(All / none)</SelectItem>
         {(wsQ.data ?? []).map((w) => (
           <SelectItem key={w.id} value={w.id}>
             {w.name}
