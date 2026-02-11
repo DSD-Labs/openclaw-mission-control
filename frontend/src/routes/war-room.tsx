@@ -6,7 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-type WarRoomRun = { ok: boolean; conversationId: string };
+type WarRoomRun = { ok: boolean; conversationId: string; warRoomRunId?: string };
+
+type WarRoomRunRow = {
+  id: string;
+  created_at?: string | null;
+  final_answer: string;
+  conversation_id: string;
+  telegram_error?: string | null;
+};
 
 type Turn = {
   id: string;
@@ -38,6 +46,12 @@ function WarRoomPage() {
     enabled: !!run.data?.conversationId,
   });
 
+  const runsQ = useQuery({
+    queryKey: ["warRoomRuns"],
+    queryFn: () => apiGet<WarRoomRunRow[]>("/api/war-room/runs?limit=50"),
+    refetchInterval: 10000,
+  });
+
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
@@ -67,6 +81,37 @@ function WarRoomPage() {
           )}
 
           {run.error && <div className="text-sm text-destructive">{String(run.error)}</div>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Run history</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {runsQ.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
+          {runsQ.error && <div className="text-sm text-destructive">{String(runsQ.error)}</div>}
+
+          <div className="grid gap-2">
+            {(runsQ.data ?? []).map((r) => (
+              <div key={r.id} className="rounded-lg border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs text-muted-foreground">{r.created_at ?? ""}</div>
+                  <div className="text-xs font-mono">{r.id}</div>
+                </div>
+                <div className="mt-1 text-sm font-semibold">{r.final_answer}</div>
+                {r.telegram_error ? (
+                  <div className="mt-1 text-xs text-destructive">telegram: {r.telegram_error}</div>
+                ) : null}
+                <div className="mt-2 text-xs text-muted-foreground">
+                  conversation: <span className="font-mono">{r.conversation_id}</span>
+                </div>
+              </div>
+            ))}
+            {(runsQ.data?.length ?? 0) === 0 && !runsQ.isLoading && (
+              <div className="text-sm text-muted-foreground">No runs yet.</div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

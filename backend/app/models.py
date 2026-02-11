@@ -174,6 +174,9 @@ class WarRoomRun(Base):
 
     final_answer: Mapped[str] = mapped_column(Text, nullable=False)
 
+    # Serialized chair summary JSON (for quick UI rendering)
+    summary_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
     telegram_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
     telegram_topic_id: Mapped[str | None] = mapped_column(String, nullable=True)
     telegram_message_id: Mapped[str | None] = mapped_column(String, nullable=True)

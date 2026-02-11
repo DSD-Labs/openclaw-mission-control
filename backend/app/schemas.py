@@ -128,6 +128,22 @@ class TurnOut(BaseModel):
         from_attributes = True
 
 
+class WarRoomRunOut(BaseModel):
+    id: str
+    workspace_id: str | None
+    conversation_id: str
+    final_answer: str
+    summary_json: dict
+    telegram_chat_id: str | None
+    telegram_topic_id: str | None
+    telegram_message_id: str | None
+    telegram_error: str | None
+    created_at: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class AgentWorkStateUpsert(BaseModel):
     agent_id: str
     task_id: str | None = None

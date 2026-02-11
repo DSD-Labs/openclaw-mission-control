@@ -34,6 +34,7 @@ from .schemas import (
     TaskOut,
     TurnCreate,
     TurnOut,
+    WarRoomRunOut,
     WorkspaceCreate,
     WorkspaceOut,
 )
@@ -518,6 +519,33 @@ def list_audit(
     return q.order_by(AuditEvent.created_at.desc()).limit(min(limit, 500)).all()
 
 
+@app.get("/api/war-room/runs", response_model=list[WarRoomRunOut])
+def list_war_room_runs(
+    db: Session = Depends(get_db),
+    limit: int = 50,
+    workspace_id: str | None = Depends(_workspace_from_header),
+):
+    q = db.query(WarRoomRun)
+    if workspace_id:
+        q = q.filter(WarRoomRun.workspace_id == workspace_id)
+    return q.order_by(WarRoomRun.created_at.desc()).limit(min(limit, 200)).all()
+
+
+@app.get("/api/war-room/runs/{run_id}", response_model=WarRoomRunOut)
+def get_war_room_run(
+    run_id: str,
+    db: Session = Depends(get_db),
+    workspace_id: str | None = Depends(_workspace_from_header),
+):
+    q = db.query(WarRoomRun).filter(WarRoomRun.id == run_id)
+    if workspace_id:
+        q = q.filter(WarRoomRun.workspace_id == workspace_id)
+    run = q.first()
+    if not run:
+        raise HTTPException(status_code=404, detail="War room run not found")
+    return run
+
+
 # --- War Room ---
 
 
@@ -858,6 +886,7 @@ async def war_room_run(
         workspace_id=workspace_id,
         conversation_id=convo.id,
         final_answer=final_answer,
+        summary_json=decision,
         telegram_chat_id=settings.telegram_chat_id,
         telegram_topic_id=settings.telegram_topic_id,
     )
