@@ -1,0 +1,19 @@
+{
+  "openclaw": {
+    "gateways": [
+      {
+        "id": "primary",
+        "url": "http://localhost:3001",
+        "token": "CHANGE_ME"
+      }
+    ]
+  },
+  "warRoom": {
+    "enabled": true,
+    "schedule": "hourly",
+    "telegram": {
+      "chatId": "-1003399728683",
+      "topicId": "2298"
+    }
+  }
+}
