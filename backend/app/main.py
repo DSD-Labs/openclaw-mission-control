@@ -1,24 +1,25 @@
 import json
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
-
-from .openclaw import get_openclaw
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from .db import engine, get_db
 from .models import (
+    Agent,
+    AgentWorkState,
+    AuditEvent,
     Base,
     Conversation,
     ConversationType,
+    Gateway,
     Task,
     Turn,
-    Agent,
     WarRoomRun,
-    AgentWorkState,
-    AuditEvent,
+    Workspace,
 )
+from .openclaw import get_openclaw
 from .schemas import (
     AgentCreate,
     AgentOut,
@@ -26,10 +27,14 @@ from .schemas import (
     AuditEventOut,
     ConversationCreate,
     ConversationOut,
+    GatewayCreate,
+    GatewayOut,
     TaskCreate,
     TaskOut,
     TurnCreate,
     TurnOut,
+    WorkspaceCreate,
+    WorkspaceOut,
 )
 from .settings import settings
 
@@ -48,7 +53,6 @@ def _actor_from_headers(
     x_mc_user: str | None = Header(default=None),
     x_mc_role: str | None = Header(default=None),
 ) -> tuple[str, str]:
-    # v0: trust headers provided by UI (behind auth later)
     actor = x_mc_user or "unknown"
     role = x_mc_role or "operator"
     return actor, role
@@ -76,13 +80,14 @@ def _audit(
         )
     )
 
+
 origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins or ["*"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"] ,
+    allow_headers=["*"],
 )
 
 
@@ -91,10 +96,75 @@ def health():
     return {"ok": True}
 
 
+# --- Gateways / Workspaces (v0) ---
+
+
+@app.get("/api/gateways", response_model=list[GatewayOut])
+def list_gateways(db: Session = Depends(get_db)):
+    return db.query(Gateway).order_by(Gateway.created_at.desc()).all()
+
+
+@app.post("/api/gateways", response_model=GatewayOut, dependencies=[Depends(_require_api_key)])
+def create_gateway(
+    body: GatewayCreate,
+    db: Session = Depends(get_db),
+    actor_role: tuple[str, str] = Depends(_actor_from_headers),
+):
+    gw = Gateway(
+        id=str(uuid4()),
+        name=body.name,
+        url=body.url,
+        token=body.token,
+        enabled=body.enabled,
+    )
+    db.add(gw)
+    _audit(
+        db,
+        actor=actor_role[0],
+        role=actor_role[1],
+        action="gateway.create",
+        entity_type="gateway",
+        entity_id=gw.id,
+        payload={"name": gw.name, "url": gw.url, "enabled": gw.enabled},
+    )
+    db.commit()
+    db.refresh(gw)
+    return gw
+
+
+@app.get("/api/workspaces", response_model=list[WorkspaceOut])
+def list_workspaces(db: Session = Depends(get_db)):
+    return db.query(Workspace).order_by(Workspace.created_at.desc()).all()
+
+
+@app.post("/api/workspaces", response_model=WorkspaceOut, dependencies=[Depends(_require_api_key)])
+def create_workspace(
+    body: WorkspaceCreate,
+    db: Session = Depends(get_db),
+    actor_role: tuple[str, str] = Depends(_actor_from_headers),
+):
+    ws = Workspace(id=str(uuid4()), name=body.name, gateway_id=body.gateway_id)
+    db.add(ws)
+    _audit(
+        db,
+        actor=actor_role[0],
+        role=actor_role[1],
+        action="workspace.create",
+        entity_type="workspace",
+        entity_id=ws.id,
+        payload={"name": ws.name, "gateway_id": ws.gateway_id},
+    )
+    db.commit()
+    db.refresh(ws)
+    return ws
+
+
+# --- Agents ---
+
+
 @app.get("/api/agents", response_model=list[AgentOut])
 def list_agents(db: Session = Depends(get_db)):
     agents = db.query(Agent).order_by(Agent.updated_at.desc()).all()
-    # ensure work_state relationship loads (sqlite is fine; later optimize)
     for a in agents:
         _ = a.work_state
     return agents
@@ -156,7 +226,6 @@ def update_agent(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    # Minimal patch semantics (v0). Later: strong schema validation.
     for field in ["name", "role", "soul_md", "model", "enabled", "skills_allow"]:
         if field in body:
             setattr(agent, field, body[field])
@@ -180,6 +249,9 @@ def update_agent(
     return agent
 
 
+# --- Work state ---
+
+
 @app.post(
     "/api/agent-work-state",
     response_model=dict,
@@ -190,7 +262,6 @@ def upsert_agent_work_state(
     db: Session = Depends(get_db),
     actor_role: tuple[str, str] = Depends(_actor_from_headers),
 ):
-    # Upsert by agent_id
     state = db.query(AgentWorkState).filter(AgentWorkState.agent_id == body.agent_id).first()
     if not state:
         state = AgentWorkState(agent_id=body.agent_id)
@@ -214,14 +285,7 @@ def upsert_agent_work_state(
     return {"ok": True}
 
 
-@app.get("/api/audit", response_model=list[AuditEventOut])
-def list_audit(db: Session = Depends(get_db), limit: int = 200):
-    return (
-        db.query(AuditEvent)
-        .order_by(AuditEvent.created_at.desc())
-        .limit(min(limit, 500))
-        .all()
-    )
+# --- Tasks ---
 
 
 @app.get("/api/tasks", response_model=list[TaskOut])
@@ -300,6 +364,9 @@ def update_task(
     return task
 
 
+# --- Conversations ---
+
+
 @app.post("/api/conversations")
 def create_conversation(body: ConversationCreate, db: Session = Depends(get_db)):
     convo = Conversation(id=str(uuid4()), type=body.type, task_id=body.task_id)
@@ -313,7 +380,6 @@ def create_conversation(body: ConversationCreate, db: Session = Depends(get_db))
 def get_conversation(conversation_id: str, db: Session = Depends(get_db)):
     convo = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     if not convo:
-        # Let FastAPI return a 200 null for v0; later we can make this a 404
         return None  # type: ignore[return-value]
 
     turns = (
@@ -342,10 +408,23 @@ def add_turn(conversation_id: str, body: TurnCreate, db: Session = Depends(get_d
     return turn
 
 
-@app.post("/api/war-room/run")
-async def _send_telegram_via_openclaw(text: str) -> tuple[str | None, str | None]:
-    """Send a Telegram message via OpenClaw Gateway tools/invoke (message tool)."""
+# --- Audit ---
 
+
+@app.get("/api/audit", response_model=list[AuditEventOut])
+def list_audit(db: Session = Depends(get_db), limit: int = 200):
+    return (
+        db.query(AuditEvent)
+        .order_by(AuditEvent.created_at.desc())
+        .limit(min(limit, 500))
+        .all()
+    )
+
+
+# --- War Room ---
+
+
+async def _send_telegram_via_openclaw(text: str) -> tuple[str | None, str | None]:
     oc = get_openclaw()
     if not oc:
         return None, "OPENCLAW_GATEWAY_URL/TOKEN not configured"
@@ -372,16 +451,6 @@ async def war_room_run(
     db: Session = Depends(get_db),
     actor_role: tuple[str, str] = Depends(_actor_from_headers),
 ):
-    """v0 orchestrator.
-
-    Creates a WAR_ROOM conversation with multiple turns:
-    - Chair opening
-    - Snapshot of DOING/BLOCKED tasks
-    - Chair questions to each owner (or unassigned)
-    - Mocked agent updates (placeholder until OpenClaw adapter is wired)
-    - Chair decisions + proposed task moves
-    """
-
     convo = Conversation(id=str(uuid4()), type=ConversationType.WAR_ROOM)
     db.add(convo)
 
@@ -427,7 +496,6 @@ async def war_room_run(
         )
     add_turn("chair", "\n".join(snapshot_lines))
 
-    # Ask for updates
     for t in tasks:
         owner = agents_by_id.get(t.owner_agent_id) if t.owner_agent_id else None
         who = owner.name if owner else "(unassigned)"
@@ -442,7 +510,6 @@ async def war_room_run(
             ),
         )
 
-        # Mocked agent response (until OpenClaw adapter exists)
         if owner:
             add_turn(
                 "agent",
@@ -462,7 +529,6 @@ async def war_room_run(
                 "No agent assigned. Chair should assign an owner or move task back to READY.",
             )
 
-    # Chair decisions + proposed moves
     moves = []
     for t in tasks:
         if not t.owner_agent_id:
@@ -485,7 +551,6 @@ async def war_room_run(
         "Chair summary (v0):\n```json\n" + json.dumps(decision, indent=2) + "\n```",
     )
 
-    # Store run + attempt Telegram send (best-effort)
     run_id = str(uuid4())
     wr = WarRoomRun(
         id=run_id,
@@ -507,8 +572,6 @@ async def war_room_run(
 
     db.commit()
 
-    # Best-effort send after commit
-    # (If send fails, we still have the transcript + stored final_answer)
     try:
         message_id, err = await _send_telegram_via_openclaw(final_answer)
         if message_id:

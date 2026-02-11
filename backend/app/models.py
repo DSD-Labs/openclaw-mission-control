@@ -41,6 +41,7 @@ class Agent(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Deny-by-default allowlist of skills/tools this agent may access.
+    # Store as JSON array of strings (we keep it flexible as JSON).
     skills_allow: Mapped[list] = mapped_column(JSON, default=list)
 
     # Execution policy controls whether the agent may execute tools or must propose.
@@ -97,7 +98,9 @@ class AgentWorkState(Base):
     next_step: Mapped[str] = mapped_column(Text, default="")
     blockers: Mapped[str] = mapped_column(Text, default="")
 
-    updated_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[str] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Conversation(Base):
@@ -126,6 +129,7 @@ class Turn(Base):
 
     speaker_type: Mapped[str] = mapped_column(String, nullable=False)
     speaker_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
     content: Mapped[str] = mapped_column(Text, nullable=False)
     tool_events: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
@@ -164,5 +168,34 @@ class AuditEvent(Base):
 
     # details
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# --- Multi-gateway / multi-workspace (v0) ---
+
+
+class Gateway(Base):
+    __tablename__ = "gateways"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    url: Mapped[str] = mapped_column(String, nullable=False)
+
+    # NOTE: v0 stores token plaintext in DB. Next: encrypt at rest / KMS.
+    token: Mapped[str] = mapped_column(String, nullable=False)
+
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+
+    gateway_id: Mapped[str | None] = mapped_column(String, ForeignKey("gateways.id"), nullable=True)
 
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())

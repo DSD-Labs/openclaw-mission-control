@@ -146,6 +146,39 @@ class AuditEventOut(BaseModel):
         from_attributes = True
 
 
+class GatewayCreate(BaseModel):
+    name: str
+    url: str
+    token: str
+    enabled: bool = True
+
+
+class GatewayOut(BaseModel):
+    id: str
+    name: str
+    url: str
+    enabled: bool
+    created_at: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class WorkspaceCreate(BaseModel):
+    name: str
+    gateway_id: str | None = None
+
+
+class WorkspaceOut(BaseModel):
+    id: str
+    name: str
+    gateway_id: str | None
+    created_at: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class ConversationOut(BaseModel):
     id: str
     type: ConversationType
