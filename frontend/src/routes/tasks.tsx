@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiGet, apiPost } from "@/lib/api";
+import { DndKanban as DndBoard } from "@/components/kanban/DndKanban";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -227,70 +228,51 @@ function TasksPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-            {columns.map((col) => {
-              const colTasks = tasks.filter((t) => t.status === col);
-              return (
-                <div key={col} className="rounded-lg border">
-                  <div className="border-b px-3 py-2 text-xs font-extrabold tracking-wide">
-                    {col} ({colTasks.length})
-                  </div>
-                  <div className="grid gap-2 p-2">
-                    {colTasks.map((t) => (
-                      <div key={t.id} className="rounded-lg border bg-card p-2">
-                        <div className="text-sm font-extrabold leading-tight">{t.title}</div>
-                        <div className="mt-2 grid gap-2">
-                          <div className="grid gap-1">
-                            <div className="text-[11px] text-muted-foreground">Status</div>
-                            <Select
-                              value={t.status}
-                              onValueChange={(v: string) => patch.mutate({ id: t.id, patch: { status: v as TaskStatus } })}
-                            >
-                              <SelectTrigger className="h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {columns.map((c) => (
-                                  <SelectItem key={c} value={c}>
-                                    {c}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+          {/* DnD board */}
+          <DndBoard
+            tasks={tasks.map((t) => ({
+              id: t.id,
+              title: t.title,
+              status: t.status,
+              priority: t.priority,
+            }))}
+            onMove={(taskId, toStatus) => patch.mutate({ id: taskId, patch: { status: toStatus } })}
+          />
 
-                          <div className="grid gap-1">
-                            <div className="text-[11px] text-muted-foreground">Owner</div>
-                            <Select
-                              value={t.owner_agent_id ?? ""}
-                              onValueChange={(v: string) => patch.mutate({ id: t.id, patch: { owner_agent_id: v || null } })}
-                            >
-                              <SelectTrigger className="h-8">
-                                <SelectValue placeholder="Unassigned" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="">Unassigned</SelectItem>
-                                {agents.map((a) => (
-                                  <SelectItem key={a.id} value={a.id}>
-                                    {a.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+          <div className="text-sm text-muted-foreground">
+            Tip: you can still change Owner from the task card controls below (DnD is status-only for now).
+          </div>
 
-                          <div className="text-xs text-muted-foreground">prio: {t.priority}</div>
-                          <div className="truncate text-[11px] text-muted-foreground">id: {t.id}</div>
-                        </div>
-                      </div>
-                    ))}
-                    {colTasks.length === 0 && (
-                      <div className="px-1 py-2 text-xs text-muted-foreground">—</div>
-                    )}
-                  </div>
+          {/* Owner controls (kept for now) */}
+          <div className="grid grid-cols-1 gap-2">
+            {tasks.map((t) => (
+              <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-extrabold">{t.title}</div>
+                  <div className="text-xs text-muted-foreground">status: {t.status} · prio: {t.priority}</div>
                 </div>
-              );
-            })}
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={t.owner_agent_id ?? ""}
+                    onValueChange={(v: string) =>
+                      patch.mutate({ id: t.id, patch: { owner_agent_id: v || null } })
+                    }
+                  >
+                    <SelectTrigger className="h-8 w-[180px]">
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Unassigned</SelectItem>
+                      {agents.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            ))}
           </div>
 
           {patch.error && <div className="text-sm text-destructive">{String(patch.error)}</div>}
