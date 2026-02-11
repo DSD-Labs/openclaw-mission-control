@@ -39,6 +39,12 @@ class OpenClawClient:
     async def sessions_list(self, *, limit: int = 50) -> dict:
         return await self.invoke_tool("sessions_list", {"limit": limit})
 
+    async def sessions_history(self, session_key: str, *, limit: int = 50, include_tools: bool = False) -> dict:
+        return await self.invoke_tool(
+            "sessions_history",
+            {"sessionKey": session_key, "limit": limit, "includeTools": include_tools},
+        )
+
     async def sessions_send(self, session_key: str, message: str) -> dict:
         return await self.invoke_tool("sessions_send", {"sessionKey": session_key, "message": message})
 

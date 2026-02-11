@@ -198,6 +198,7 @@ def create_agent(
         role=body.role,
         soul_md=body.soul_md,
         model=body.model,
+        openclaw_agent_id=body.openclaw_agent_id,
         enabled=body.enabled,
         skills_allow=body.skills_allow,
         execution_policy=body.execution_policy.model_dump(),
@@ -244,7 +245,7 @@ def update_agent(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    for field in ["name", "role", "soul_md", "model", "enabled", "skills_allow"]:
+    for field in ["name", "role", "soul_md", "model", "openclaw_agent_id", "enabled", "skills_allow"]:
         if field in body:
             setattr(agent, field, body[field])
 
@@ -543,19 +544,86 @@ async def war_room_run(
             ),
         )
 
-        if owner:
+        # Real agent call via OpenClaw (if configured)
+        if owner and getattr(owner, "openclaw_agent_id", None):
+            oc = get_openclaw()
+            if not oc:
+                add_turn("system", "OpenClaw gateway not configured; cannot spawn agent runs.")
+                continue
+
+            prompt = "\n".join(
+                [
+                    "You are in the hourly War Room.",
+                    f"Task: {t.title}",
+                    f"Description: {t.description or ''}",
+                    "Reply ONLY with these fields:",
+                    "current_task:",
+                    "status:",
+                    "next_step:",
+                    "blockers:",
+                ]
+            )
+
+            add_turn("system", f"Spawning OpenClaw agent `{owner.openclaw_agent_id}` for update…")
+
+            try:
+                spawn_res = await oc.sessions_spawn(
+                    task=prompt,
+                    label=f"war-room:{convo.id}:{t.id}",
+                    agent_id=owner.openclaw_agent_id,
+                )
+                child_key = spawn_res.get("childSessionKey")
+                if not child_key:
+                    add_turn("system", f"Spawn returned no childSessionKey: {spawn_res}")
+                    continue
+
+                # Poll history until we see an assistant message.
+                import asyncio
+
+                assistant_msg = None
+                for _ in range(20):
+                    hist = await oc.sessions_history(child_key, limit=20, include_tools=False)
+                    msgs = (
+                        hist
+                        if isinstance(hist, list)
+                        else hist.get("messages")
+                        if isinstance(hist, dict)
+                        else []
+                    )
+                    for m in reversed(msgs):
+                        if isinstance(m, dict) and m.get("role") == "assistant":
+                            assistant_msg = m.get("content")
+                            break
+                    if assistant_msg:
+                        break
+                    await asyncio.sleep(1.5)
+
+                if assistant_msg:
+                    add_turn("agent", str(assistant_msg), speaker_id=owner.id)
+                else:
+                    add_turn("system", f"Timed out waiting for agent response (session {child_key}).")
+
+            except Exception as e:
+                add_turn("system", f"Agent spawn/history failed: {e}")
+
+        elif owner and not getattr(owner, "openclaw_agent_id", None):
+            add_turn(
+                "system",
+                "Owner has no `openclaw_agent_id` configured yet; falling back to mocked update.",
+            )
             add_turn(
                 "agent",
                 "\n".join(
                     [
                         f"current_task: {t.title}",
-                        f"status: working (mocked update)",
-                        "next_step: provide real update once OpenClaw adapter is wired",
+                        "status: working (mocked update)",
+                        "next_step: set openclaw_agent_id for this employee agent",
                         "blockers: none reported (mocked)",
                     ]
                 ),
                 speaker_id=owner.id,
             )
+
         else:
             add_turn(
                 "system",

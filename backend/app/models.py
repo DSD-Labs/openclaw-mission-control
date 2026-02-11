@@ -44,6 +44,10 @@ class Agent(Base):
     # Optional model override (otherwise use platform default)
     model: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # Which OpenClaw agentId to use when spawning this employee agent.
+    # (This is the `agentId` argument to OpenClaw `sessions_spawn`.)
+    openclaw_agent_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Deny-by-default allowlist of skills/tools this agent may access.

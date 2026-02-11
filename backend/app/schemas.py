@@ -33,6 +33,7 @@ class AgentCreate(BaseModel):
     role: str
     soul_md: str = ""
     model: str | None = None
+    openclaw_agent_id: str | None = None
     enabled: bool = True
 
     # deny-by-default allowlist
@@ -60,6 +61,7 @@ class AgentOut(BaseModel):
     role: str
     soul_md: str
     model: str | None
+    openclaw_agent_id: str | None = None
     enabled: bool
 
     skills_allow: list
