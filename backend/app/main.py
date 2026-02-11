@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -56,6 +56,35 @@ def create_agent(body: AgentCreate, db: Session = Depends(get_db)):
         constraints=body.constraints.model_dump(),
         output_contract=body.output_contract.model_dump(),
     )
+    db.add(agent)
+    db.commit()
+    db.refresh(agent)
+    return agent
+
+
+@app.get("/api/agents/{agent_id}", response_model=AgentOut)
+def get_agent(agent_id: str, db: Session = Depends(get_db)):
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
+
+
+@app.patch("/api/agents/{agent_id}", response_model=AgentOut)
+def update_agent(agent_id: str, body: dict, db: Session = Depends(get_db)):
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    # Minimal patch semantics (v0). Later: strong schema validation.
+    for field in ["name", "role", "soul_md", "model", "enabled", "skills_allow"]:
+        if field in body:
+            setattr(agent, field, body[field])
+
+    for field in ["execution_policy", "constraints", "output_contract"]:
+        if field in body:
+            setattr(agent, field, body[field])
+
     db.add(agent)
     db.commit()
     db.refresh(agent)
