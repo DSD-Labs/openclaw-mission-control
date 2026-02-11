@@ -89,6 +89,9 @@ class Task(Base):
     status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.BACKLOG)
     priority: Mapped[int] = mapped_column(Integer, default=0)
 
+    # Manual ordering within a status column (lower = earlier)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
     owner_agent_id: Mapped[str | None] = mapped_column(String, ForeignKey("agents.id"), nullable=True)
     owner_agent: Mapped[Agent | None] = relationship(back_populates="tasks")
 

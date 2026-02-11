@@ -344,7 +344,7 @@ def list_tasks(
     q = db.query(Task)
     if workspace_id:
         q = q.filter(Task.workspace_id == workspace_id)
-    return q.order_by(Task.priority.desc(), Task.updated_at.desc()).all()
+    return q.order_by(Task.status.asc(), Task.sort_order.asc(), Task.priority.desc(), Task.updated_at.desc()).all()
 
 
 @app.post(
@@ -365,6 +365,7 @@ def create_task(
         description=body.description,
         status=body.status,
         priority=body.priority,
+        sort_order=body.sort_order,
         owner_agent_id=body.owner_agent_id,
     )
     db.add(task)
@@ -438,7 +439,7 @@ def update_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    for field in ["title", "description", "status", "priority", "owner_agent_id"]:
+    for field in ["title", "description", "status", "priority", "sort_order", "owner_agent_id"]:
         if field in body:
             setattr(task, field, body[field])
 

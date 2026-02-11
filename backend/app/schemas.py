@@ -83,6 +83,7 @@ class TaskCreate(BaseModel):
     description: str | None = None
     status: TaskStatus = TaskStatus.BACKLOG
     priority: int = 0
+    sort_order: int = 0
     owner_agent_id: str | None = None
 
 
@@ -92,6 +93,7 @@ class TaskOut(BaseModel):
     description: str | None
     status: TaskStatus
     priority: int
+    sort_order: int
     owner_agent_id: str | None
 
     class Config:

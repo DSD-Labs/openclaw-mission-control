@@ -33,6 +33,7 @@ type Task = {
   description?: string | null;
   status: TaskStatus;
   priority: number;
+  sort_order?: number;
   owner_agent_id?: string | null;
 };
 
@@ -250,6 +251,7 @@ function TasksPage() {
               title: t.title,
               status: t.status,
               priority: t.priority,
+              sort_order: t.sort_order ?? 0,
             }))}
             onMove={(taskId, toStatus) => patch.mutate({ id: taskId, patch: { status: toStatus } })}
           />

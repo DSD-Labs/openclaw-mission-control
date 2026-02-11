@@ -23,6 +23,7 @@ export type KanbanTask = {
   title: string;
   status: TaskStatus;
   priority: number;
+  sort_order?: number;
 };
 
 const columns: TaskStatus[] = ["BACKLOG", "READY", "DOING", "BLOCKED", "REVIEW", "DONE"];
@@ -104,7 +105,9 @@ export function DndKanban({
     for (const c of columns) map.set(c, []);
     for (const t of tasks) map.get(t.status)?.push(t);
     for (const c of columns) {
-      map.get(c)!.sort((a, b) => (b.priority - a.priority) || a.title.localeCompare(b.title));
+      map.get(c)!.sort(
+        (a, b) => ((a.sort_order ?? 0) - (b.sort_order ?? 0)) || (b.priority - a.priority) || a.title.localeCompare(b.title),
+      );
     }
     return map;
   }, [tasks]);
