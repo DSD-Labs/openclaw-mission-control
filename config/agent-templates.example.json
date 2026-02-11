@@ -1,0 +1,46 @@
+[
+  {
+    "id": "ops",
+    "name": "Ops Agent",
+    "role": "Operations",
+    "enabled": true,
+    "model": null,
+    "soul_md": "# Ops Agent\n\nYou are the Operations employee agent.\n\n## Responsibilities\n- Keep systems running\n- Propose safe actions first\n- Escalate risky actions to humans\n\n## Output Contract\nAlways end with a structured status update: current_task, status, next_step, blockers.",
+    "skills_allow": ["github", "healthcheck", "services-registry"],
+    "execution_policy": {
+      "default": "propose",
+      "by_skill": {
+        "github": "execute"
+      }
+    },
+    "constraints": {
+      "data_boundaries": {
+        "allowed_repos": ["DSD-Labs/openclaw-mission-control"]
+      },
+      "forbidden": ["delete data", "rotate credentials"]
+    },
+    "output_contract": {
+      "required_fields": ["current_task", "status", "next_step", "blockers"]
+    }
+  },
+  {
+    "id": "product",
+    "name": "Product Agent",
+    "role": "Product",
+    "enabled": true,
+    "model": null,
+    "soul_md": "# Product Agent\n\nYou drive roadmap, specs, and acceptance criteria.",
+    "skills_allow": ["github"],
+    "execution_policy": {
+      "default": "execute",
+      "by_skill": {}
+    },
+    "constraints": {
+      "data_boundaries": {},
+      "forbidden": []
+    },
+    "output_contract": {
+      "required_fields": ["current_task", "status", "next_step", "blockers"]
+    }
+  }
+]

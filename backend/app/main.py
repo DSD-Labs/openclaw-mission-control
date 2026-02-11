@@ -51,6 +51,9 @@ def create_agent(body: AgentCreate, db: Session = Depends(get_db)):
         model=body.model,
         enabled=body.enabled,
         skills_allow=body.skills_allow,
+        execution_policy=body.execution_policy.model_dump(),
+        constraints=body.constraints.model_dump(),
+        output_contract=body.output_contract.model_dump(),
     )
     db.add(agent)
     db.commit()

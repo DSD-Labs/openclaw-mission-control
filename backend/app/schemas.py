@@ -3,13 +3,44 @@ from pydantic import BaseModel, Field
 from .models import ConversationType, TaskStatus
 
 
+# --- Agent profile schema ---
+
+
+class AgentExecutionPolicy(BaseModel):
+    # default behavior: "execute" | "propose"
+    default: str = "propose"
+
+    # per-skill override: {"github": "execute", "coolify": "propose"}
+    by_skill: dict[str, str] = Field(default_factory=dict)
+
+
+class AgentOutputContract(BaseModel):
+    # Minimal contract we can enforce everywhere.
+    required_fields: list[str] = Field(
+        default_factory=lambda: ["current_task", "status", "next_step", "blockers"]
+    )
+
+
+class AgentConstraints(BaseModel):
+    # Flexible JSON object for future governance constraints.
+    # Examples: budgets, forbidden operations, data boundaries.
+    data_boundaries: dict = Field(default_factory=dict)
+    forbidden: list[str] = Field(default_factory=list)
+
+
 class AgentCreate(BaseModel):
     name: str
     role: str
     soul_md: str = ""
     model: str | None = None
     enabled: bool = True
+
+    # deny-by-default allowlist
     skills_allow: list[str] = Field(default_factory=list)
+
+    execution_policy: AgentExecutionPolicy = Field(default_factory=AgentExecutionPolicy)
+    constraints: AgentConstraints = Field(default_factory=AgentConstraints)
+    output_contract: AgentOutputContract = Field(default_factory=AgentOutputContract)
 
 
 class AgentOut(BaseModel):
@@ -19,10 +50,17 @@ class AgentOut(BaseModel):
     soul_md: str
     model: str | None
     enabled: bool
+
     skills_allow: list
+    execution_policy: dict
+    constraints: dict
+    output_contract: dict
 
     class Config:
         from_attributes = True
+
+
+# --- Tasks ---
 
 
 class TaskCreate(BaseModel):
@@ -43,6 +81,9 @@ class TaskOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- Conversations / transcripts ---
 
 
 class ConversationCreate(BaseModel):

@@ -28,11 +28,36 @@ class Agent(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
+
+    # High-level function / department label (e.g. "Ops", "Finance")
     role: Mapped[str] = mapped_column(String, nullable=False)
+
+    # The agent's core system prompt / Soul (markdown)
     soul_md: Mapped[str] = mapped_column(Text, default="")
+
+    # Optional model override (otherwise use platform default)
     model: Mapped[str | None] = mapped_column(String, nullable=True)
+
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    skills_allow: Mapped[dict] = mapped_column(JSON, default=list)
+
+    # Deny-by-default allowlist of skills/tools this agent may access.
+    # Store as JSON array of strings (we keep it flexible as JSON).
+    skills_allow: Mapped[list] = mapped_column(JSON, default=list)
+
+    # Execution policy controls whether the agent may execute tools or must propose.
+    # Shape (example):
+    # {
+    #   "default": "propose",
+    #   "bySkill": {"github": "execute", "coolify": "propose"}
+    # }
+    execution_policy: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    # Additional constraints: budgets, forbidden actions, data boundaries, etc.
+    constraints: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    # Output contract: what the agent must report on each run.
+    # e.g. {"status": true, "fields": ["current_task","next_step","blockers"]}
+    output_contract: Mapped[dict] = mapped_column(JSON, default=dict)
 
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[str] = mapped_column(
