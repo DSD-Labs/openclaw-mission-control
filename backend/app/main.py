@@ -50,6 +50,16 @@ def _require_api_key(x_mc_api_key: str | None = Header(default=None)):
             raise HTTPException(status_code=401, detail="Invalid API key")
 
 
+def _require_role(allowed: set[str]):
+    def _dep(actor_role: tuple[str, str] = Depends(_actor_from_headers)):
+        role = (actor_role[1] or "operator").lower()
+        if role not in {r.lower() for r in allowed}:
+            raise HTTPException(status_code=403, detail=f"Role '{role}' not permitted")
+        return actor_role
+
+    return _dep
+
+
 def _actor_from_headers(
     x_mc_user: str | None = Header(default=None),
     x_mc_role: str | None = Header(default=None),
@@ -111,7 +121,11 @@ def list_gateways(db: Session = Depends(get_db)):
     return db.query(Gateway).order_by(Gateway.created_at.desc()).all()
 
 
-@app.post("/api/gateways", response_model=GatewayOut, dependencies=[Depends(_require_api_key)])
+@app.post(
+    "/api/gateways",
+    response_model=GatewayOut,
+    dependencies=[Depends(_require_api_key), Depends(_require_role({"admin"}))],
+)
 def create_gateway(
     body: GatewayCreate,
     db: Session = Depends(get_db),
@@ -150,7 +164,11 @@ def list_workspaces(db: Session = Depends(get_db)):
     return db.query(Workspace).order_by(Workspace.created_at.desc()).all()
 
 
-@app.post("/api/workspaces", response_model=WorkspaceOut, dependencies=[Depends(_require_api_key)])
+@app.post(
+    "/api/workspaces",
+    response_model=WorkspaceOut,
+    dependencies=[Depends(_require_api_key), Depends(_require_role({"admin"}))],
+)
 def create_workspace(
     body: WorkspaceCreate,
     db: Session = Depends(get_db),
@@ -190,7 +208,11 @@ def list_agents(
     return agents
 
 
-@app.post("/api/agents", response_model=AgentOut, dependencies=[Depends(_require_api_key)])
+@app.post(
+    "/api/agents",
+    response_model=AgentOut,
+    dependencies=[Depends(_require_api_key), Depends(_require_role({"admin", "operator"}))],
+)
 def create_agent(
     body: AgentCreate,
     db: Session = Depends(get_db),
@@ -238,7 +260,7 @@ def get_agent(agent_id: str, db: Session = Depends(get_db)):
 @app.patch(
     "/api/agents/{agent_id}",
     response_model=AgentOut,
-    dependencies=[Depends(_require_api_key)],
+    dependencies=[Depends(_require_api_key), Depends(_require_role({"admin", "operator"}))],
 )
 def update_agent(
     agent_id: str,
@@ -281,7 +303,7 @@ def update_agent(
 @app.post(
     "/api/agent-work-state",
     response_model=dict,
-    dependencies=[Depends(_require_api_key)],
+    dependencies=[Depends(_require_api_key), Depends(_require_role({"admin", "operator"}))],
 )
 def upsert_agent_work_state(
     body: AgentWorkStateUpsert,
@@ -325,7 +347,11 @@ def list_tasks(
     return q.order_by(Task.priority.desc(), Task.updated_at.desc()).all()
 
 
-@app.post("/api/tasks", response_model=TaskOut, dependencies=[Depends(_require_api_key)])
+@app.post(
+    "/api/tasks",
+    response_model=TaskOut,
+    dependencies=[Depends(_require_api_key), Depends(_require_role({"admin", "operator"}))],
+)
 def create_task(
     body: TaskCreate,
     db: Session = Depends(get_db),
@@ -399,7 +425,7 @@ def get_or_create_task_conversation(
 @app.patch(
     "/api/tasks/{task_id}",
     response_model=TaskOut,
-    dependencies=[Depends(_require_api_key)],
+    dependencies=[Depends(_require_api_key), Depends(_require_role({"admin", "operator"}))],
 )
 def update_task(
     task_id: str,
@@ -547,7 +573,10 @@ def _parse_owner_updates(text: str) -> list[dict]:
     return out
 
 
-@app.post("/api/war-room/run", dependencies=[Depends(_require_api_key)])
+@app.post(
+    "/api/war-room/run",
+    dependencies=[Depends(_require_api_key), Depends(_require_role({"admin", "operator"}))],
+)
 async def war_room_run(
     db: Session = Depends(get_db),
     actor_role: tuple[str, str] = Depends(_actor_from_headers),
