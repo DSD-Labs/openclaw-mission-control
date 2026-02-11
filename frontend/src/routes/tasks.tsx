@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/hooks/use-toast";
 
 type TaskStatus = "BACKLOG" | "READY" | "DOING" | "BLOCKED" | "REVIEW" | "DONE";
 
@@ -78,7 +79,28 @@ function TasksPage() {
   const patch = useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: Partial<Task> }) =>
       apiPatch<Task>(`/api/tasks/${id}`, patch),
-    onSuccess: async () => {
+    onMutate: async ({ id, patch }) => {
+      await qc.cancelQueries({ queryKey: ["tasks"] });
+      const prev = qc.getQueryData<Task[]>(["tasks"]);
+      if (prev) {
+        qc.setQueryData<Task[]>(["tasks"],
+          prev.map((t) => (t.id === id ? ({ ...t, ...patch } as Task) : t)),
+        );
+      }
+      return { prev };
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["tasks"], ctx.prev);
+      toast({
+        variant: "destructive",
+        title: "Failed to update task",
+        description: String(err),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Task updated" });
+    },
+    onSettled: async () => {
       await qc.invalidateQueries({ queryKey: ["tasks"] });
     },
   });
