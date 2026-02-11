@@ -530,22 +530,50 @@ async def war_room_run(
         )
     add_turn("chair", "\n".join(snapshot_lines))
 
+    # Group tasks by owner so we can spawn once per owner
+    tasks_by_owner: dict[str, list[Task]] = {}
+    unassigned: list[Task] = []
     for t in tasks:
-        owner = agents_by_id.get(t.owner_agent_id) if t.owner_agent_id else None
-        who = owner.name if owner else "(unassigned)"
+        if not t.owner_agent_id:
+            unassigned.append(t)
+            continue
+        tasks_by_owner.setdefault(t.owner_agent_id, []).append(t)
+
+    # Unassigned tasks
+    for t in unassigned:
         add_turn(
             "chair",
             "\n".join(
                 [
                     f"Update request for task: {t.title}",
-                    f"Owner: {who}",
-                    "Please reply with: current_task, status, next_step, blockers.",
+                    "Owner: (unassigned)",
+                    "Action: assign an owner or move back to READY.",
+                ]
+            ),
+        )
+        add_turn(
+            "system",
+            "No agent assigned. Chair should assign an owner or move task back to READY.",
+        )
+
+    for owner_id, owner_tasks in tasks_by_owner.items():
+        owner = agents_by_id.get(owner_id)
+        if not owner:
+            continue
+
+        add_turn(
+            "chair",
+            "\n".join(
+                [
+                    f"Owner update request: {owner.name}",
+                    "Please reply for EACH task with: current_task, status, next_step, blockers.",
+                    "Tasks:",
+                    *[f"- {t.title} (status {t.status}, prio {t.priority})" for t in owner_tasks],
                 ]
             ),
         )
 
-        # Real agent call via OpenClaw (if configured)
-        if owner and getattr(owner, "openclaw_agent_id", None):
+        if owner.openclaw_agent_id:
             oc = get_openclaw()
             if not oc:
                 add_turn("system", "OpenClaw gateway not configured; cannot spawn agent runs.")
@@ -554,22 +582,33 @@ async def war_room_run(
             prompt = "\n".join(
                 [
                     "You are in the hourly War Room.",
-                    f"Task: {t.title}",
-                    f"Description: {t.description or ''}",
-                    "Reply ONLY with these fields:",
+                    "Provide a structured update for each task listed.",
+                    "Format for each task:",
+                    "task_title:",
                     "current_task:",
                     "status:",
                     "next_step:",
                     "blockers:",
+                    "---",
+                    "Tasks:",
+                    *[
+                        f"- {t.title}\n  description: {(t.description or '').strip()}\n  status: {t.status}\n  priority: {t.priority}"
+                        for t in owner_tasks
+                    ],
                 ]
             )
 
-            add_turn("system", f"Spawning OpenClaw agent `{owner.openclaw_agent_id}` for update…")
+            add_turn(
+                "system",
+                f"Spawning OpenClaw agent `{owner.openclaw_agent_id}` for owner update…",
+            )
 
             try:
+                import asyncio
+
                 spawn_res = await oc.sessions_spawn(
                     task=prompt,
-                    label=f"war-room:{convo.id}:{t.id}",
+                    label=f"war-room:{convo.id}:owner:{owner.id}",
                     agent_id=owner.openclaw_agent_id,
                 )
                 child_key = spawn_res.get("childSessionKey")
@@ -577,12 +616,9 @@ async def war_room_run(
                     add_turn("system", f"Spawn returned no childSessionKey: {spawn_res}")
                     continue
 
-                # Poll history until we see an assistant message.
-                import asyncio
-
                 assistant_msg = None
-                for _ in range(20):
-                    hist = await oc.sessions_history(child_key, limit=20, include_tools=False)
+                for _ in range(25):
+                    hist = await oc.sessions_history(child_key, limit=30, include_tools=False)
                     msgs = (
                         hist
                         if isinstance(hist, list)
@@ -606,7 +642,7 @@ async def war_room_run(
             except Exception as e:
                 add_turn("system", f"Agent spawn/history failed: {e}")
 
-        elif owner and not getattr(owner, "openclaw_agent_id", None):
+        else:
             add_turn(
                 "system",
                 "Owner has no `openclaw_agent_id` configured yet; falling back to mocked update.",
@@ -615,7 +651,7 @@ async def war_room_run(
                 "agent",
                 "\n".join(
                     [
-                        f"current_task: {t.title}",
+                        f"current_task: (all tasks for {owner.name})",
                         "status: working (mocked update)",
                         "next_step: set openclaw_agent_id for this employee agent",
                         "blockers: none reported (mocked)",
@@ -624,18 +660,28 @@ async def war_room_run(
                 speaker_id=owner.id,
             )
 
-        else:
-            add_turn(
-                "system",
-                "No agent assigned. Chair should assign an owner or move task back to READY.",
-            )
-
-    moves = []
+    moves: list[dict] = []
     for t in tasks:
         if not t.owner_agent_id:
             moves.append({"taskId": t.id, "from": t.status, "to": "READY", "reason": "Needs owner"})
         elif t.status == "BLOCKED":
             moves.append({"taskId": t.id, "from": "BLOCKED", "to": "DOING", "reason": "Assume unblock after check"})
+
+    # Optionally apply moves
+    applied_moves: list[dict] = []
+    if settings.apply_war_room_moves:
+        for m in moves:
+            tid = m.get("taskId")
+            to = m.get("to")
+            if not tid or not to:
+                continue
+            task = db.query(Task).filter(Task.id == tid).first()
+            if not task:
+                continue
+            # only apply status moves for now
+            task.status = to
+            db.add(task)
+            applied_moves.append(m)
 
     final_answer = "War Room complete. Next steps assigned in Mission Control."
 
@@ -645,6 +691,7 @@ async def war_room_run(
             "All agent updates must be logged as transcript turns.",
         ],
         "proposed_task_moves": moves,
+        "applied_task_moves": applied_moves,
         "final_answer_for_telegram": final_answer,
     }
     add_turn(

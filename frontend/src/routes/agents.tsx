@@ -32,6 +32,7 @@ type AgentCreate = {
   name: string;
   role: string;
   soul_md: string;
+  openclaw_agent_id?: string | null;
   enabled: boolean;
   skills_allow: string[];
   execution_policy: { default: string; by_skill: Record<string, string> };
@@ -64,6 +65,7 @@ function AgentsPage() {
       name: "",
       role: "",
       soul_md: "",
+      openclaw_agent_id: null,
       enabled: true,
       skills_allow: [],
       execution_policy: { default: "propose", by_skill: {} },
@@ -111,6 +113,19 @@ function AgentsPage() {
                       onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
                       placeholder="Operations"
                     />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-semibold">OpenClaw agentId (optional)</label>
+                    <Input
+                      value={form.openclaw_agent_id ?? ""}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, openclaw_agent_id: e.target.value || null }))
+                      }
+                      placeholder="main (or an allowed agentId)"
+                    />
+                    <div className="text-xs text-muted-foreground">
+                      If set, War Room can spawn this employee agent via OpenClaw.
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <input

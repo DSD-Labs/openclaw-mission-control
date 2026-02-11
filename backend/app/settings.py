@@ -16,5 +16,11 @@ class Settings(BaseSettings):
     telegram_chat_id: str | None = None
     telegram_topic_id: str | None = None
 
+    # War room behavior
+    apply_war_room_moves: bool = False
+
+    # alias for env var APPLY_WAR_ROOM_MOVES
+    # (pydantic-settings maps automatically from APPLY_WAR_ROOM_MOVES -> apply_war_room_moves)
+
 
 settings = Settings()
