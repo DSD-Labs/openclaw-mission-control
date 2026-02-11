@@ -1,11 +1,13 @@
+import json
 from uuid import uuid4
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from .db import engine, get_db
-from .models import Base, Conversation, ConversationType, Task, Turn, Agent
+from .models import Base, Conversation, ConversationType, Task, Turn, Agent, WarRoomRun
 from .schemas import (
     AgentCreate,
     AgentOut,
@@ -179,7 +181,57 @@ def add_turn(conversation_id: str, body: TurnCreate, db: Session = Depends(get_d
 
 
 @app.post("/api/war-room/run")
-def war_room_run(db: Session = Depends(get_db)):
+async def _send_telegram_via_openclaw(text: str) -> tuple[str | None, str | None]:
+    """Send a Telegram message via the OpenClaw Gateway Tools Invoke API.
+
+    Returns: (message_id, error)
+    """
+
+    if not settings.openclaw_gateway_url or not settings.openclaw_gateway_token:
+        return None, "OPENCLAW_GATEWAY_URL/TOKEN not configured"
+    if not settings.telegram_chat_id:
+        return None, "TELEGRAM_CHAT_ID not configured"
+
+    url = settings.openclaw_gateway_url.rstrip("/") + "/tools/invoke"
+    headers = {
+        "authorization": f"Bearer {settings.openclaw_gateway_token}",
+        "content-type": "application/json",
+        # Help group policies resolve context if needed
+        "x-openclaw-message-channel": "telegram",
+    }
+
+    args = {
+        "action": "send",
+        "channel": "telegram",
+        "target": settings.telegram_chat_id,
+        "message": text,
+    }
+    if settings.telegram_topic_id:
+        args["threadId"] = settings.telegram_topic_id
+
+    payload = {
+        "tool": "message",
+        "args": args,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            res = await client.post(url, headers=headers, json=payload)
+            if res.status_code != 200:
+                return None, f"OpenClaw gateway error {res.status_code}: {res.text[:400]}"
+            data = res.json()
+            result = data.get("result")
+            # message tool returns provider-specific payload; best-effort extraction
+            message_id = None
+            if isinstance(result, dict):
+                message_id = result.get("messageId") or result.get("id")
+            return message_id, None
+    except Exception as e:
+        return None, str(e)
+
+
+@app.post("/api/war-room/run")
+async def war_room_run(db: Session = Depends(get_db)):
     """v0 orchestrator.
 
     Creates a WAR_ROOM conversation with multiple turns:
@@ -278,18 +330,57 @@ def war_room_run(db: Session = Depends(get_db)):
         elif t.status == "BLOCKED":
             moves.append({"taskId": t.id, "from": "BLOCKED", "to": "DOING", "reason": "Assume unblock after check"})
 
+    final_answer = "War Room complete. Next steps assigned in Mission Control."
+
     decision = {
         "decisions": [
             "Use Kanban as the source of truth; every task must have an owner.",
             "All agent updates must be logged as transcript turns.",
         ],
         "proposed_task_moves": moves,
-        "final_answer_for_telegram": "War Room complete. Next steps assigned in Mission Control. (Telegram posting wired in next milestone.)",
+        "final_answer_for_telegram": final_answer,
     }
     add_turn(
         "chair",
-        "Chair summary (v0):\n```json\n" + __import__("json").dumps(decision, indent=2) + "\n```",
+        "Chair summary (v0):\n```json\n" + json.dumps(decision, indent=2) + "\n```",
     )
 
+    # Store run + attempt Telegram send (best-effort)
+    run_id = str(uuid4())
+    wr = WarRoomRun(
+        id=run_id,
+        conversation_id=convo.id,
+        final_answer=final_answer,
+        telegram_chat_id=settings.telegram_chat_id,
+        telegram_topic_id=settings.telegram_topic_id,
+    )
+    db.add(wr)
+
     db.commit()
-    return {"ok": True, "conversationId": convo.id}
+
+    # Best-effort send after commit
+    # (If send fails, we still have the transcript + stored final_answer)
+    try:
+        message_id, err = await _send_telegram_via_openclaw(final_answer)
+        if message_id:
+            wr.telegram_message_id = str(message_id)
+        if err:
+            wr.telegram_error = err
+        db.add(wr)
+        db.commit()
+    except Exception as e:
+        wr.telegram_error = str(e)
+        db.add(wr)
+        db.commit()
+
+    return {
+        "ok": True,
+        "conversationId": convo.id,
+        "warRoomRunId": run_id,
+        "telegram": {
+            "chatId": settings.telegram_chat_id,
+            "topicId": settings.telegram_topic_id,
+            "messageId": wr.telegram_message_id,
+            "error": wr.telegram_error,
+        },
+    }

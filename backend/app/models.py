@@ -56,7 +56,6 @@ class Agent(Base):
     constraints: Mapped[dict] = mapped_column(JSON, default=dict)
 
     # Output contract: what the agent must report on each run.
-    # e.g. {"status": true, "fields": ["current_task","next_step","blockers"]}
     output_contract: Mapped[dict] = mapped_column(JSON, default=dict)
 
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -115,5 +114,21 @@ class Turn(Base):
     speaker_id: Mapped[str | None] = mapped_column(String, nullable=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     tool_events: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class WarRoomRun(Base):
+    __tablename__ = "war_room_runs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(String, ForeignKey("conversations.id"), nullable=False)
+
+    final_answer: Mapped[str] = mapped_column(Text, nullable=False)
+
+    telegram_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    telegram_topic_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    telegram_message_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    telegram_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.now())
