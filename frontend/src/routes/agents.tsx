@@ -1,57 +1,66 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { apiGet } from '../lib/api'
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+
+import { apiGet } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Agent = {
-  id: string
-  name: string
-  role: string
-  enabled: boolean
-}
+  id: string;
+  name: string;
+  role: string;
+  enabled: boolean;
+};
 
-export const Route = createFileRoute('/agents')({
+export const Route = createFileRoute("/agents")({
   component: AgentsPage,
-})
+});
 
 function AgentsPage() {
   const q = useQuery({
-    queryKey: ['agents'],
-    queryFn: () => apiGet<Agent[]>('/api/agents'),
+    queryKey: ["agents"],
+    queryFn: () => apiGet<Agent[]>("/api/agents"),
     refetchInterval: 5000,
-  })
+  });
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <h1 style={{ margin: 0, fontSize: 22 }}>Agents</h1>
-      {q.isLoading && <div>Loading…</div>}
-      {q.error && <div style={{ color: 'crimson' }}>{String(q.error)}</div>}
+    <div className="grid gap-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-black tracking-tight">Agents</h1>
+        <Badge variant="secondary">read-only</Badge>
+      </div>
 
-      <div style={{ border: '1px solid rgba(0,0,0,0.12)', borderRadius: 10 }}>
-        <div
-          style={{
-            padding: 12,
-            fontWeight: 700,
-            borderBottom: '1px solid rgba(0,0,0,0.12)',
-          }}
-        >
-          {q.data?.length ?? 0} agent(s)
-        </div>
-        <div style={{ padding: 12, display: 'grid', gap: 10 }}>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{q.data?.length ?? 0} agent(s)</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {q.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
+          {q.error && (
+            <div className="text-sm text-destructive">{String(q.error)}</div>
+          )}
+
           {(q.data ?? []).map((a) => (
-            <div key={a.id} style={{ display: 'grid', gap: 2 }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
-                <div style={{ fontWeight: 800 }}>{a.name}</div>
-                <div style={{ opacity: 0.7, fontSize: 13 }}>{a.role}</div>
-                <div style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>
-                  {a.enabled ? 'enabled' : 'disabled'}
+            <div
+              key={a.id}
+              className="flex flex-col gap-1 rounded-lg border p-3"
+            >
+              <div className="flex items-baseline gap-3">
+                <div className="font-extrabold">{a.name}</div>
+                <div className="text-sm text-muted-foreground">{a.role}</div>
+                <div className="ml-auto text-xs text-muted-foreground">
+                  {a.enabled ? "enabled" : "disabled"}
                 </div>
               </div>
-              <div style={{ fontSize: 12, opacity: 0.6 }}>id: {a.id}</div>
+              <div className="text-xs text-muted-foreground">id: {a.id}</div>
             </div>
           ))}
-          {(q.data?.length ?? 0) === 0 && <div style={{ opacity: 0.7 }}>No agents yet.</div>}
-        </div>
-      </div>
+
+          {(q.data?.length ?? 0) === 0 && !q.isLoading && (
+            <div className="text-sm text-muted-foreground">No agents yet.</div>
+          )}
+        </CardContent>
+      </Card>
     </div>
-  )
+  );
 }

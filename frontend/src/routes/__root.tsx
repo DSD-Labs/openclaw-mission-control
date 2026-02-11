@@ -1,31 +1,69 @@
-import { Outlet, createRootRoute } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+import { Link, Outlet, createRootRoute } from "@tanstack/react-router";
+import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
 export const Route = createRootRoute({
   component: () => (
-    <div style={{ padding: 16, maxWidth: 1100, margin: '0 auto' }}>
-      <header
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 16,
-          padding: '12px 0',
-          borderBottom: '1px solid rgba(0,0,0,0.12)',
-        }}
-      >
-        <div style={{ fontWeight: 800 }}>OpenClaw Mission Control</div>
-        <nav style={{ display: 'flex', gap: 12, fontSize: 14 }}>
-          <a href='/'>Home</a>
-          <a href='/agents'>Agents</a>
-          <a href='/tasks'>Kanban</a>
-          <a href='/war-room'>War Room</a>
-        </nav>
-      </header>
-      <main style={{ padding: '18px 0' }}>
-        <Outlet />
-      </main>
-      <TanStackRouterDevtools position='bottom-right' />
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-6xl px-4 py-4">
+        <header className="flex items-center justify-between gap-4 border-b pb-3">
+          <div className="flex items-center gap-3">
+            <div className="font-black tracking-tight">OpenClaw Mission Control</div>
+          </div>
+
+          <nav className="hidden items-center gap-4 text-sm md:flex">
+            <Link to="/" className="opacity-80 hover:opacity-100">
+              Home
+            </Link>
+            <Link to="/agents" className="opacity-80 hover:opacity-100">
+              Agents
+            </Link>
+            <Link to="/tasks" className="opacity-80 hover:opacity-100">
+              Kanban
+            </Link>
+            <Link to="/war-room" className="opacity-80 hover:opacity-100">
+              War Room
+            </Link>
+          </nav>
+
+          <div className="md:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  Menu
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link to="/">Home</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/agents">Agents</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/tasks">Kanban</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/war-room">War Room</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+
+        <main className="py-6">
+          <Outlet />
+        </main>
+      </div>
+
+      <TanStackRouterDevtools position="bottom-right" />
     </div>
   ),
-})
+});

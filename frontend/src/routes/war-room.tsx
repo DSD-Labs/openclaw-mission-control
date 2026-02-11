@@ -1,56 +1,53 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query'
-import { apiPost } from '../lib/api'
+import { createFileRoute } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
 
-export const Route = createFileRoute('/war-room')({
+import { apiPost } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+type WarRoomRun = { ok: boolean; conversationId: string };
+
+export const Route = createFileRoute("/war-room")({
   component: WarRoomPage,
-})
+});
 
 function WarRoomPage() {
   const run = useMutation({
-    mutationFn: () => apiPost<{ ok: boolean; conversationId: string }>('/api/war-room/run'),
-  })
+    mutationFn: () => apiPost<WarRoomRun>("/api/war-room/run"),
+  });
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <h1 style={{ margin: 0, fontSize: 22 }}>War Room</h1>
-      <p style={{ margin: 0, opacity: 0.8 }}>
-        Hourly sync meeting. v0 stub: creates a WAR_ROOM conversation.
-      </p>
+    <div className="grid gap-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-black tracking-tight">War Room</h1>
+        <Badge variant="secondary">stub</Badge>
+      </div>
 
-      <button
-        onClick={() => run.mutate()}
-        disabled={run.isPending}
-        style={{
-          padding: '10px 12px',
-          borderRadius: 10,
-          border: '1px solid rgba(0,0,0,0.16)',
-          background: run.isPending ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.03)',
-          cursor: run.isPending ? 'not-allowed' : 'pointer',
-          width: 'fit-content',
-          fontWeight: 800,
-        }}
-      >
-        {run.isPending ? 'Running…' : 'Run War Room (stub)'}
-      </button>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Hourly sync meeting</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          <div className="text-sm text-muted-foreground">
+            v0 stub: creates a WAR_ROOM conversation and a system turn.
+          </div>
 
-      {run.data && (
-        <pre
-          style={{
-            margin: 0,
-            padding: 12,
-            borderRadius: 10,
-            border: '1px solid rgba(0,0,0,0.12)',
-            background: 'rgba(0,0,0,0.03)',
-            overflowX: 'auto',
-            fontSize: 12,
-          }}
-        >
-          {JSON.stringify(run.data, null, 2)}
-        </pre>
-      )}
+          <div>
+            <Button onClick={() => run.mutate()} disabled={run.isPending}>
+              {run.isPending ? "Running…" : "Run War Room"}
+            </Button>
+          </div>
 
-      {run.error && <div style={{ color: 'crimson' }}>{String(run.error)}</div>}
+          {run.data && (
+            <pre className="overflow-x-auto rounded-lg border bg-muted p-3 text-xs">
+              {JSON.stringify(run.data, null, 2)}
+            </pre>
+          )}
+
+          {run.error && <div className="text-sm text-destructive">{String(run.error)}</div>}
+        </CardContent>
+      </Card>
     </div>
-  )
+  );
 }
